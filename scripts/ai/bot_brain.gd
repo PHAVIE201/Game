@@ -42,6 +42,8 @@ var _zone_check_timer := 0.0
 ## Buildings already searched for loot (key: center Vector2).
 var searched := {}
 var _throw_timer := 0.0
+var _throw_yaw := 0.0
+var _throw_pitch := 0.0
 var _heal_check_timer := 0.0
 ## Last time a grenade / smoke was thrown (cooldowns).
 var last_throw_time := -100.0
@@ -118,7 +120,9 @@ func _physics_process(delta: float) -> void:
 	_update_throw(delta)
 
 	var dir := Vector3.ZERO
-	if nav.active:
+	if character.throwing_item != &"":
+		pass   # stand still while throwing (the throw inherits our velocity)
+	elif nav.active:
 		dir = nav.update(delta)
 	elif direct_move.length_squared() > 0.01:
 		dir = nav.steer(direct_move.normalized(), delta)
@@ -312,22 +316,36 @@ func throw_grenade_at(id: StringName, spot: Vector3, max_error := 5.0) -> bool:
 	var old_yaw := c.aim_yaw
 	var old_pitch := c.aim_pitch
 	c.aim_yaw = yaw
+	# Where it is when it goes off: smoke pops after its fuse, a frag is cooked
+	# for the wind-up only.
+	var fuse := ThrowableSystem.SMOKE_FUSE if id == &"grenade_smoke" else ThrowableSystem.FRAG_FUSE - 0.45
 	var best_pitch := 0.3
 	var best_err := INF
+	var candidates: Array[float] = []
 	for k in 12:
-		c.aim_pitch = -0.25 + k * 0.08
-		var pts := Game.throwables.predict(c.get_throw_origin(), c.get_throw_velocity(), 3.5)
-		var err := (pts[pts.size() - 1] as Vector3).distance_to(spot)
-		if err < best_err:
-			best_err = err
-			best_pitch = c.aim_pitch
+		candidates.append(-0.25 + k * 0.08)
+	for pass_k in 2:
+		for pitch in candidates:
+			c.aim_pitch = pitch
+			# Same time step as the real flight so bounces match.
+			var pts := Game.throwables.predict(c.get_throw_origin(), c.get_throw_velocity(), fuse, 8,
+				1.0 / Engine.physics_ticks_per_second)
+			var err := (pts[pts.size() - 1] as Vector3).distance_to(spot)
+			if err < best_err:
+				best_err = err
+				best_pitch = pitch
+		# Refine around the best coarse angle.
+		candidates = [best_pitch - 0.05, best_pitch - 0.025, best_pitch + 0.025, best_pitch + 0.05]
 	c.aim_yaw = old_yaw
 	c.aim_pitch = old_pitch
 	if best_err > max_error or not c.begin_throw(id):
 		return false
-	# Face the throw direction, release once turned.
+	# Turn toward the throw during the wind-up, release along the planned arc.
 	var dir := Vector3(-sin(yaw) * cos(best_pitch), sin(best_pitch), -cos(yaw) * cos(best_pitch))
 	look_at_point(c.get_eye_position() + dir * 40.0)
+	stop_moving()
+	_throw_yaw = yaw
+	_throw_pitch = best_pitch
 	_throw_timer = 0.45
 	last_throw_time = time
 	return true
@@ -338,7 +356,35 @@ func _update_throw(delta: float) -> void:
 		return
 	_throw_timer -= delta
 	if _throw_timer <= 0.0:
+		character.aim_yaw = _throw_yaw
+		character.aim_pitch = _throw_pitch
 		character.release_throw()
+
+
+## A nearby spot hidden (at crouch height) from `threat_eye`, or Vector3.INF.
+## Samples a ring around the bot; prefers close spots that do not move away
+## from the enemy much.
+func find_cover(threat_eye: Vector3) -> Vector3:
+	var world := Game.world
+	var pos := character.global_position
+	var best := Vector3.INF
+	var best_score := INF
+	var d_now := pos.distance_to(threat_eye)
+	var offset := rng.randf() * TAU
+	for k in 12:
+		var ang := offset + k * TAU / 12.0
+		var r := rng.randf_range(2.5, 10.0)
+		var p := pos + Vector3(cos(ang), 0.0, sin(ang)) * r
+		if not world.is_walkable(p.x, p.z) or world.settlements.is_inside_building(p, 0.5):
+			continue
+		p.y = world.get_height(p.x, p.z)
+		if Game.projectiles.has_line_of_sight(threat_eye, p + Vector3(0, 0.95, 0)):
+			continue
+		var score := r + maxf(p.distance_to(threat_eye) - d_now, 0.0) * 0.6
+		if score < best_score:
+			best_score = score
+			best = p
+	return best
 
 
 ## Still missing important gear (a usable gun, ammo, armor, heals)?
@@ -494,6 +540,10 @@ func pick_wander_destination() -> Vector3:
 # --------------------------------------------------------------------------
 
 func on_enemy_seen(c: GameCharacter) -> void:
+	# Running from the zone: ignore far enemies instead of turning around.
+	if fsm.is_in(&"zone") and zone_urgency() > 0.0 and time - last_damaged_time > 2.0:
+		if character.global_position.distance_to(c.global_position) > 25.0:
+			return
 	# Bare hands: only fight when the enemy is right here (or hurt us).
 	if not has_usable_gun() and not fsm.is_in(&"combat"):
 		var d := character.global_position.distance_to(c.global_position)

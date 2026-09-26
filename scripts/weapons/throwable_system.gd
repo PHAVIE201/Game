@@ -167,16 +167,17 @@ func _move(g: Grenade, delta: float, space: PhysicsDirectSpaceState3D) -> void:
 		g.node.rotate_x(delta * 9.0)
 
 
-## Where a throw would go (up to `seconds`), for the aiming arc.
-func predict(from: Vector3, vel: Vector3, seconds := 3.0) -> PackedVector3Array:
+## Where a throw would go (up to `seconds` or `max_bounces`), for the aiming
+## arc and for bots choosing a throw angle.
+func predict(from: Vector3, vel: Vector3, seconds := 3.0, max_bounces := 2, step := 1.0 / 30.0) -> PackedVector3Array:
 	var pts := PackedVector3Array([from])
 	var space := get_world_3d().direct_space_state
 	var pos := from
 	var v := vel
-	var dt := 1.0 / 30.0
+	var dt := step
 	var t := 0.0
 	var bounces := 0
-	while t < seconds and bounces < 2:
+	while t < seconds and bounces < max_bounces:
 		var next := pos + v * dt + Vector3(0, -0.5 * GRAVITY * dt * dt, 0)
 		v.y -= GRAVITY * dt
 		_ray.from = pos
@@ -188,6 +189,8 @@ func predict(from: Vector3, vel: Vector3, seconds := 3.0) -> PackedVector3Array:
 			var vn := n * v.dot(n)
 			v = (v - vn) * 0.7 - vn * 0.35
 			bounces += 1
+			if v.length() < 1.0 and n.y > 0.6:
+				break
 		pos = next
 		pts.append(pos)
 		t += dt

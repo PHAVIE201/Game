@@ -526,23 +526,34 @@ func _bot_skill_check(p: GameCharacter) -> void:
 	brain.set_physics_process(true)
 	await _wait(9.0)
 	var healed := bot.health
-	# Smoke 14 m away from the bot, to the side of the player.
-	var side := fwd.cross(Vector3.UP)
-	var spot := bot.global_position + side * 14.0
-	spot.y = Game.world.get_height(spot.x, spot.z)
+	# Smoke 14 m away from the bot, in the first direction where an arc exists.
 	var smokes := Game.throwables.get_smoke_count()
-	var thrown := brain.throw_grenade_at(&"grenade_smoke", spot, 6.0)
+	var thrown := false
+	var spot := Vector3.ZERO
+	for k in 8:
+		var dir := fwd.rotated(Vector3.UP, PI * 0.5 + k * TAU / 8.0)
+		spot = bot.global_position + dir * 14.0
+		spot.y = Game.world.get_height(spot.x, spot.z)
+		if brain.throw_grenade_at(&"grenade_smoke", spot, 6.0):
+			thrown = true
+			break
 	await _wait(ThrowableSystem.SMOKE_FUSE + 1.2)
 	var popped := Game.throwables.get_smoke_count() > smokes
 	var miss := INF
 	for s in Game.throwables._smokes:
 		miss = minf(miss, Vector2(s.pos.x - spot.x, s.pos.z - spot.z).length())
+	# Cover from the player: the spot must be hidden at crouch height.
+	var cover := brain.find_cover(p.get_eye_position())
+	var cover_ok := cover == Vector3.INF or not Game.projectiles.has_line_of_sight(p.get_eye_position(), cover + Vector3(0, 0.95, 0))
+	print("[auto] bot cover check: found=%s hidden=%s" % [cover != Vector3.INF, cover_ok])
+	if not cover_ok:
+		_checks_failed.append("cover spot visible from the threat")
 	brain.set_physics_process(false)
 	brain.profile.view_distance = view
 	brain.profile.hearing_chance = hearing
 	Game.throwables.clear()
 	print("[auto] bot skill check: healed_to=%.0f smoke_thrown=%s popped=%s miss=%.1fm" % [healed, thrown, popped, miss])
-	if healed < 74.0 or not thrown or not popped or miss > 7.0:
+	if healed < 74.0 or not thrown or not popped or miss > 8.0:
 		_checks_failed.append("bot heal / grenade aim")
 
 

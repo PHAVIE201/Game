@@ -14,18 +14,25 @@ var crouch_chance := 0.35
 var hearing_chance := 0.8
 ## Extra seconds of margin before heading into the next safe zone.
 var zone_margin := 30.0
+## Chance to look for cover in a fight / to use grenades (tactics).
+var cover_chance := 0.55
+var grenade_chance := 0.6
 
 
 static func create(difficulty: int, rng: RandomNumberGenerator) -> BotProfile:
 	var p := BotProfile.new()
 	match difficulty:
 		MatchConfig.Difficulty.EASY:
+			p.cover_chance = 0.25
+			p.grenade_chance = 0.2
 			p.reaction_time = 0.85
 			p.aim_error = 0.024
 			p.turn_speed = 3.0
 			p.view_distance = 130.0
 			p.recoil_control = 0.4
 		MatchConfig.Difficulty.HARD:
+			p.cover_chance = 0.8
+			p.grenade_chance = 0.9
 			p.reaction_time = 0.3
 			p.aim_error = 0.008
 			p.turn_speed = 6.5

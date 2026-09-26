@@ -274,8 +274,20 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
   cứu tới 75, hộp y tế khi máu rất thấp) rồi tới đồ tăng lực. Không hồi máu khi đang ở ngoài bo mà bo sắp đóng.
 - Đang giao chiến mà máu < 40: nếu địch đã mất dấu mình > 2 giây thì hồi máu ngay; nếu máu < 30 và có bom khói
   thì **ném khói về phía địch** rồi hồi máu sau màn khói (khói chặn tầm nhìn của bot địch).
-- Bot ném lựu đạn / khói có ngắm: thử 12 góc ném bằng quỹ đạo dự đoán của `ThrowableSystem` (tính cả nảy) và
-  chọn góc rơi gần điểm cần ném nhất, quay người rồi mới thả tay.
+- Bot ném lựu đạn / khói có ngắm: thử các góc ném bằng quỹ đạo dự đoán của `ThrowableSystem` (cùng bước thời
+  gian với vật lý, tính cả nảy, lấy vị trí lúc ngòi nổ), tinh chỉnh quanh góc tốt nhất, đứng yên, quay người rồi
+  thả tay đúng góc đã tính (sai số thường 3–7 m ở 14 m).
+
+**3.3 Chiến thuật giao tranh** ✔
+- **Nấp**: giữa trận ở tầm trung (hoặc khi bị bắn mà không thấy kẻ bắn), bot tìm chỗ nấp gần (thử 12 điểm quanh
+  mình, chọn điểm bị tường / cây / đá / địa hình che ở độ cao khi ngồi, không lùi xa địch quá), chạy tới, ngồi
+  xuống (nạp đạn), rồi **đứng lên bắn vài giây và lại nấp**.
+- **Lựu đạn**: địch vừa nấp mất dấu (1.2–6 giây), cách 7–34 m, bot có lựu đạn thì ném vào vị trí cuối cùng thấy
+  địch (thời gian hồi 10 giây).
+- **Bo đang đóng**: bot bỏ trận đánh khi mất dấu địch (hoặc địch ở xa) để chạy vào bo, và trên đường chạy thì bỏ
+  qua địch ở xa nếu không bị bắn.
+- Độ khó ảnh hưởng chiến thuật: tỉ lệ tìm chỗ nấp 25% / 55% / 80%, dùng lựu đạn 20% / 60% / 90% (Dễ / Thường /
+  Khó).
 
 ## 4. Kiến trúc
 

@@ -3,7 +3,8 @@ extends BotState
 ## Fight the current target: aim with human-like error, shoot in bursts,
 ## strafe, crouch / go prone, reload, chase when the target breaks line of sight.
 
-enum Tactic { HOLD, STRAFE, APPROACH, RETREAT }
+enum Tactic { HOLD, STRAFE, APPROACH, RETREAT, COVER }
+enum CoverPhase { MOVE, HIDE, PEEK }
 
 var _tactic: int = Tactic.HOLD
 var _tactic_timer := 0.0
@@ -11,6 +12,11 @@ var _strafe_side := 1.0
 var _burst_left := 0
 var _burst_start_ammo := 0
 var _pause := 0.0
+var _cover_pos := Vector3.ZERO
+var _cover_phase: int = CoverPhase.MOVE
+var _cover_timer := 0.0
+var _last_cover_search := -100.0
+var _grenade_checked_at := -100.0
 
 
 func enter(_params: Dictionary) -> void:
@@ -37,6 +43,10 @@ func update(delta: float) -> void:
 		return
 	var visible := brain.is_target_visible()
 	var lost_for := brain.time - brain.target_last_seen_time
+	# The zone is closing on us: break off when the enemy is not in sight.
+	if (lost_for > 1.0 or c.global_position.distance_to(t.global_position) > 60.0) and brain.zone_urgency() > 0.0:
+		brain.fsm.change(&"zone")
+		return
 	# Badly hurt: patch up when the enemy lost sight of us, or break contact
 	# behind a smoke screen.
 	if c.health < 40.0 and brain.pick_heal_or_boost() != &"":
@@ -56,6 +66,8 @@ func update(delta: float) -> void:
 	var dist := c.global_position.distance_to(t.global_position)
 	if not brain.has_usable_gun():
 		_fight_unarmed(t, dist, visible)
+		return
+	if _try_grenade(lost_for, dist):
 		return
 	var aim_pt := brain.get_aim_point(delta)
 	brain.look_at_point(aim_pt)
@@ -93,12 +105,17 @@ func update(delta: float) -> void:
 			_burst_left = 0
 			_pause = _pause_after_burst(data, dist)
 			fire = false
+	if _tactic == Tactic.COVER and _cover_phase != CoverPhase.PEEK:
+		fire = false   # hiding: no shots
 	c.input_fire = fire
 
 	# ---- Movement / tactics ---------------------------------------------------------
 	_tactic_timer -= delta
 	if _tactic_timer <= 0.0:
 		_choose_tactic(dist, visible)
+	# Hit by someone we cannot see: get behind something.
+	if _tactic != Tactic.COVER and brain.time - brain.last_damaged_time < 0.3 and not visible:
+		_start_cover(t)
 	var to_target := t.global_position - c.global_position
 	to_target.y = 0.0
 	var fwd := to_target.normalized() if to_target.length_squared() > 0.01 else Vector3.FORWARD
@@ -118,6 +135,8 @@ func update(delta: float) -> void:
 			brain.nav.stop()
 			brain.move_mode = BotBrain.MoveMode.RUN
 			brain.direct_move = (-fwd + side * 0.6).normalized()
+		Tactic.COVER:
+			_update_cover(delta, c, visible)
 
 
 
@@ -155,11 +174,74 @@ func _pause_after_burst(data: WeaponData, dist: float) -> float:
 			return rng.randf_range(0.25, 0.7) + dist * 0.003
 
 
+## Cover: run to a spot hidden from the enemy, crouch (reload / patch up),
+## stand up to shoot for a moment, hide again.
+func _start_cover(t: GameCharacter) -> bool:
+	if brain.time - _last_cover_search < 3.0:
+		return false
+	_last_cover_search = brain.time
+	var spot := brain.find_cover(t.get_eye_position())
+	if spot == Vector3.INF:
+		return false
+	_cover_pos = spot
+	_cover_phase = CoverPhase.MOVE
+	_tactic = Tactic.COVER
+	_tactic_timer = brain.rng.randf_range(10.0, 16.0)
+	brain.move_to(_cover_pos, BotBrain.MoveMode.RUN, 0.8)
+	return true
+
+
+func _update_cover(delta: float, c: GameCharacter, visible: bool) -> void:
+	_cover_timer -= delta
+	match _cover_phase:
+		CoverPhase.MOVE:
+			if brain.nav.arrived or Vector2(c.global_position.x - _cover_pos.x, c.global_position.z - _cover_pos.z).length() < 1.0:
+				_cover_phase = CoverPhase.HIDE
+				_cover_timer = brain.rng.randf_range(1.2, 2.6)
+				brain.stop_moving()
+				c.request_stance(GameCharacter.Stance.CROUCH)
+			elif brain.nav.failed:
+				_tactic_timer = 0.0
+		CoverPhase.HIDE:
+			brain.stop_moving()
+			if c.weapon.uses_ammo() and c.weapon.ammo < c.weapon.data.magazine_size * 0.7 and not c.weapon.is_reloading():
+				c.request_reload()
+			if _cover_timer <= 0.0 and not c.weapon.is_reloading():
+				_cover_phase = CoverPhase.PEEK
+				_cover_timer = brain.rng.randf_range(1.5, 3.5)
+				c.request_stance(GameCharacter.Stance.STAND)
+		CoverPhase.PEEK:
+			brain.stop_moving()
+			if _cover_timer <= 0.0 or (c.weapon.uses_ammo() and c.weapon.ammo == 0):
+				_cover_phase = CoverPhase.HIDE
+				_cover_timer = brain.rng.randf_range(1.0, 2.5)
+				c.request_stance(GameCharacter.Stance.CROUCH)
+	if not visible and _cover_phase == CoverPhase.PEEK and _cover_timer < 0.5:
+		# Nobody to shoot at: go look for the enemy.
+		_tactic_timer = 0.0
+
+
+## Frag at an enemy who hides (not seen for a moment, within throwing range).
+func _try_grenade(lost_for: float, dist: float) -> bool:
+	if lost_for < 1.2 or lost_for > 6.0 or dist < 7.0 or dist > 34.0:
+		return false
+	if brain.time - _grenade_checked_at < 4.0 or brain.time - brain.last_throw_time < 10.0:
+		return false
+	_grenade_checked_at = brain.time
+	if get_character().inventory.get_count(&"grenade_frag") <= 0 or brain.rng.randf() > brain.profile.grenade_chance:
+		return false
+	return brain.throw_grenade_at(&"grenade_frag", brain.target_last_seen_pos, 3.5)
+
+
 func _choose_tactic(dist: float, visible: bool) -> void:
 	var c := get_character()
 	var rng := brain.rng
 	var pref := brain.preferred_range()
 	_tactic_timer = rng.randf_range(0.9, 2.4)
+	# Mid-range firefight: fight from cover.
+	if visible and dist > 14.0 and dist < pref.y * 1.3 and rng.randf() < brain.profile.cover_chance:
+		if _start_cover(brain.target):
+			return
 	_strafe_side = 1.0 if rng.randf() < 0.5 else -1.0
 	if not visible:
 		_tactic = Tactic.APPROACH
