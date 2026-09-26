@@ -245,11 +245,15 @@ func _plane_check() -> void:
 	while not plane.doors_open and Time.get_ticks_msec() - t0 < 30000:
 		await get_tree().physics_frame
 	var on_board := plane.passengers.size()
-	# Target: the town closest to the flight line.
+	# Target: next to the building closest to the flight line (always reachable).
 	var target := Vector3.ZERO
 	var best := INF
-	for t in Game.world.get_towns():
-		var c := Vector3(t.center.x, t.height, t.center.y)
+	var door := plane.door_range()
+	for b in Game.world.settlements.buildings:
+		var c := Vector3(b.center.x, b.floor_y, b.center.y)
+		var along := plane.project(c)
+		if along < door.x + 150.0 or along > door.y - 50.0:
+			continue
 		var d := plane.lateral_distance(c)
 		if d < best:
 			best = d
@@ -377,6 +381,7 @@ func _weapon_check() -> void:
 	await _scope_check(p)
 	await _grenade_check(p)
 	await _armor_heal_check(p)
+	await _bot_skill_check(p)
 	await _zone_check(p)
 	Events.character_damaged.disconnect(on_dmg)
 	p.input_aim = false
@@ -492,6 +497,53 @@ func _grenade_check(p: GameCharacter) -> void:
 	p.max_health = 100.0
 	p.health = 100.0
 	dummy.health = 100.0
+
+
+## One bot, blind and deaf for the test: heals itself when hurt, and lands
+## a thrown smoke grenade near a chosen spot.
+func _bot_skill_check(p: GameCharacter) -> void:
+	var bot: GameCharacter = null
+	for c in Game.match_manager.alive:
+		if not c.is_player and not c.is_dead:
+			bot = c
+			break
+	var brain := bot.get_node("BotBrain") as BotBrain
+	var fwd := Vector3(-sin(p.aim_yaw), 0.0, -cos(p.aim_yaw))
+	var at := p.global_position - fwd * 6.0
+	bot.global_position = Vector3(at.x, Game.world.get_height(at.x, at.z) + 0.1, at.z)
+	bot.velocity = Vector3.ZERO
+	var view := brain.profile.view_distance
+	var hearing := brain.profile.hearing_chance
+	brain.profile.view_distance = 0.0
+	brain.profile.hearing_chance = 0.0
+	brain.clear_target()
+	bot.max_health = 100.0
+	bot.health = 40.0
+	bot.inventory.add(&"first_aid", 1)
+	bot.inventory.add(&"bandage", 3)
+	bot.inventory.add(&"grenade_smoke", 1)
+	brain.fsm.change(&"idle")
+	brain.set_physics_process(true)
+	await _wait(9.0)
+	var healed := bot.health
+	# Smoke 14 m away from the bot, to the side of the player.
+	var side := fwd.cross(Vector3.UP)
+	var spot := bot.global_position + side * 14.0
+	spot.y = Game.world.get_height(spot.x, spot.z)
+	var smokes := Game.throwables.get_smoke_count()
+	var thrown := brain.throw_grenade_at(&"grenade_smoke", spot, 6.0)
+	await _wait(ThrowableSystem.SMOKE_FUSE + 1.2)
+	var popped := Game.throwables.get_smoke_count() > smokes
+	var miss := INF
+	for s in Game.throwables._smokes:
+		miss = minf(miss, Vector2(s.pos.x - spot.x, s.pos.z - spot.z).length())
+	brain.set_physics_process(false)
+	brain.profile.view_distance = view
+	brain.profile.hearing_chance = hearing
+	Game.throwables.clear()
+	print("[auto] bot skill check: healed_to=%.0f smoke_thrown=%s popped=%s miss=%.1fm" % [healed, thrown, popped, miss])
+	if healed < 74.0 or not thrown or not popped or miss > 7.0:
+		_checks_failed.append("bot heal / grenade aim")
 
 
 ## Runs every zone phase at 1% of the normal duration: circles must nest and

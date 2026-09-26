@@ -41,6 +41,10 @@ var _weapon_switch_cooldown := 0.0
 var _zone_check_timer := 0.0
 ## Buildings already searched for loot (key: center Vector2).
 var searched := {}
+var _throw_timer := 0.0
+var _heal_check_timer := 0.0
+## Last time a grenade / smoke was thrown (cooldowns).
+var last_throw_time := -100.0
 
 ## Level of detail: bots far from the camera think less often (every 2nd / 4th
 ## physics tick, with the accumulated delta). Their last inputs stay applied in
@@ -76,6 +80,7 @@ func _build_states() -> void:
 	fsm.add(&"parachute", ParachuteState.new())
 	fsm.add(&"loot", LootState.new())
 	fsm.add(&"search", SearchState.new())
+	fsm.add(&"heal", HealState.new())
 
 
 func _physics_process(delta: float) -> void:
@@ -108,7 +113,9 @@ func _physics_process(delta: float) -> void:
 	time += delta
 	perception.update(delta)
 	_check_zone(delta)
+	_check_heal(delta)
 	fsm.update(delta)
+	_update_throw(delta)
 
 	var dir := Vector3.ZERO
 	if nav.active:
@@ -262,6 +269,76 @@ func maintain_weapon() -> void:
 	if w.uses_ammo() and not w.is_reloading() and w.ammo < w.data.magazine_size * 0.6 \
 			and character.inventory.get_ammo(w.data.ammo_type) > 0:
 		character.request_reload()
+
+
+## Heal / boost item to use now (&"" = nothing sensible).
+func pick_heal_or_boost() -> StringName:
+	var c := character
+	if c.health < 75.0:
+		var h := c.pick_heal()
+		if h != &"":
+			return h
+	if c.boost < 45.0 and c.health < 98.0:
+		for id in [&"energy_drink", &"painkiller"]:
+			if c.can_use_item(id):
+				return id
+	return &""
+
+
+## Out of combat and hurt: heal (unless the zone needs us to move now).
+func _check_heal(delta: float) -> void:
+	_heal_check_timer -= delta
+	if _heal_check_timer > 0.0:
+		return
+	_heal_check_timer = 1.0 + rng.randf() * 0.5
+	if fsm.is_in(&"combat") or fsm.is_in(&"heal") or character.is_using_item():
+		return
+	if character.health > 80.0 and character.boost > 30.0:
+		return
+	if zone_urgency() > -10.0 and Game.zone != null and not Game.zone.is_inside(character.global_position):
+		return
+	if pick_heal_or_boost() != &"":
+		fsm.change(&"heal")
+
+
+## Throws a grenade so that it lands near `target` (tries a few arcs with the
+## trajectory prediction). Returns false when no arc lands close enough.
+func throw_grenade_at(id: StringName, spot: Vector3, max_error := 5.0) -> bool:
+	var c := character
+	if Game.throwables == null or c.inventory.get_count(id) <= 0 or c.throwing_item != &"" or c.is_in_air():
+		return false
+	var to := spot - c.global_position
+	var yaw := atan2(-to.x, -to.z)
+	var old_yaw := c.aim_yaw
+	var old_pitch := c.aim_pitch
+	c.aim_yaw = yaw
+	var best_pitch := 0.3
+	var best_err := INF
+	for k in 12:
+		c.aim_pitch = -0.25 + k * 0.08
+		var pts := Game.throwables.predict(c.get_throw_origin(), c.get_throw_velocity(), 3.5)
+		var err := (pts[pts.size() - 1] as Vector3).distance_to(spot)
+		if err < best_err:
+			best_err = err
+			best_pitch = c.aim_pitch
+	c.aim_yaw = old_yaw
+	c.aim_pitch = old_pitch
+	if best_err > max_error or not c.begin_throw(id):
+		return false
+	# Face the throw direction, release once turned.
+	var dir := Vector3(-sin(yaw) * cos(best_pitch), sin(best_pitch), -cos(yaw) * cos(best_pitch))
+	look_at_point(c.get_eye_position() + dir * 40.0)
+	_throw_timer = 0.45
+	last_throw_time = time
+	return true
+
+
+func _update_throw(delta: float) -> void:
+	if character.throwing_item == &"":
+		return
+	_throw_timer -= delta
+	if _throw_timer <= 0.0:
+		character.release_throw()
 
 
 ## Still missing important gear (a usable gun, ammo, armor, heals)?

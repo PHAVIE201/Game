@@ -37,6 +37,15 @@ func update(delta: float) -> void:
 		return
 	var visible := brain.is_target_visible()
 	var lost_for := brain.time - brain.target_last_seen_time
+	# Badly hurt: patch up when the enemy lost sight of us, or break contact
+	# behind a smoke screen.
+	if c.health < 40.0 and brain.pick_heal_or_boost() != &"":
+		if lost_for > 2.0:
+			brain.fsm.change(&"heal")
+			return
+		if c.health < 30.0 and c.inventory.get_count(&"grenade_smoke") > 0 and brain.time - brain.last_throw_time > 10.0:
+			brain.fsm.change(&"heal", {"smoke_toward": t.global_position})
+			return
 	if lost_for > 3.5:
 		# Lost sight: go check the last known position.
 		var last := brain.target_last_seen_pos

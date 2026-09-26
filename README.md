@@ -268,6 +268,15 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
 - Bo: bot tính lúc nào cần đi vào vòng mới dựa vào thời gian **vòng đóng hẳn** và quãng đường, cộng thêm một
   khoảng an toàn tăng dần theo pha; khi còn dư thời gian thì vừa đi vừa nhặt đồ.
 
+**3.2 Bot hồi máu, dùng thuốc tăng lực, bom khói che chắn** ✔
+- Trạng thái mới **Heal**: khi không giao chiến và máu < 75 (hoặc boost thấp mà có nước tăng lực / thuốc giảm
+  đau), bot ngồi xuống, nhìn quanh và dùng lần lượt đồ hồi máu hợp lý (cùng luật với người chơi: băng gạc / sơ
+  cứu tới 75, hộp y tế khi máu rất thấp) rồi tới đồ tăng lực. Không hồi máu khi đang ở ngoài bo mà bo sắp đóng.
+- Đang giao chiến mà máu < 40: nếu địch đã mất dấu mình > 2 giây thì hồi máu ngay; nếu máu < 30 và có bom khói
+  thì **ném khói về phía địch** rồi hồi máu sau màn khói (khói chặn tầm nhìn của bot địch).
+- Bot ném lựu đạn / khói có ngắm: thử 12 góc ném bằng quỹ đạo dự đoán của `ThrowableSystem` (tính cả nảy) và
+  chọn góc rơi gần điểm cần ném nhất, quay người rồi mới thả tay.
+
 ## 4. Kiến trúc
 
 ```
