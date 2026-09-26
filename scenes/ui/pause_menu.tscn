@@ -1,0 +1,93 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="1_pause"]
+
+[node name="PauseMenu" type="CanvasLayer"]
+process_mode = 3
+layer = 20
+script = ExtResource("1_pause")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.03, 0.05, 0.55)
+
+[node name="Panel" type="PanelContainer" parent="Dim"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -240.0
+offset_top = -230.0
+offset_right = 240.0
+offset_bottom = 230.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Dim/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="Title" type="Label" parent="Dim/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "TẠM DỪNG"
+horizontal_alignment = 1
+
+[node name="Resume" type="Button" parent="Dim/Panel/VBox"]
+layout_mode = 2
+text = "TIẾP TỤC"
+
+[node name="Sensitivity" type="HBoxContainer" parent="Dim/Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Caption" type="Label" parent="Dim/Panel/VBox/Sensitivity"]
+layout_mode = 2
+text = "Độ nhạy chuột"
+
+[node name="Slider" type="HSlider" parent="Dim/Panel/VBox/Sensitivity"]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+min_value = 0.2
+max_value = 3.0
+step = 0.05
+value = 1.0
+
+[node name="Value" type="Label" parent="Dim/Panel/VBox/Sensitivity"]
+custom_minimum_size = Vector2(48, 0)
+layout_mode = 2
+text = "1.00"
+
+[node name="Quality" type="HBoxContainer" parent="Dim/Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Caption" type="Label" parent="Dim/Panel/VBox/Quality"]
+layout_mode = 2
+text = "Chất lượng đồ họa"
+
+[node name="Option" type="OptionButton" parent="Dim/Panel/VBox/Quality"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ShowFps" type="CheckBox" parent="Dim/Panel/VBox"]
+layout_mode = 2
+text = "Hiện FPS / hiệu năng (F3)"
+
+[node name="Menu" type="Button" parent="Dim/Panel/VBox"]
+layout_mode = 2
+text = "VỀ MENU CHÍNH"
+
+[node name="Quit" type="Button" parent="Dim/Panel/VBox"]
+layout_mode = 2
+text = "THOÁT GAME"

@@ -1,0 +1,25 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/characters/game_character.gd" id="1_char"]
+[ext_resource type="Script" path="res://scripts/characters/character_model.gd" id="2_model"]
+[ext_resource type="Script" path="res://scripts/ai/bot_brain.gd" id="3_brain"]
+[ext_resource type="Resource" path="res://resources/weapons/k7_rifle.tres" id="4_rifle"]
+
+[sub_resource type="CapsuleShape3D" id="capsule"]
+radius = 0.3
+height = 1.75
+
+[node name="Bot" type="CharacterBody3D"]
+script = ExtResource("1_char")
+weapon_data = ExtResource("4_rifle")
+display_name = "Bot"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.875, 0)
+shape = SubResource("capsule")
+
+[node name="Model" type="Node3D" parent="."]
+script = ExtResource("2_model")
+
+[node name="BotBrain" type="Node" parent="."]
+script = ExtResource("3_brain")

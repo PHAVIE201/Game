@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- LAST DROP icon: parachute over a low-poly island -->
+  <rect width="128" height="128" rx="24" fill="#6fb7e8"/>
+  <path d="M0 96 L128 96 L128 128 L0 128 Z" fill="#2f7fc1"/>
+  <path d="M18 100 L40 78 L58 86 L78 70 L108 100 Z" fill="#5fae4e"/>
+  <path d="M40 78 L58 86 L50 100 L18 100 Z" fill="#4b9340"/>
+  <path d="M78 70 L108 100 L84 100 Z" fill="#3d7d35"/>
+  <path d="M34 40 Q64 6 94 40 Z" fill="#f2c94c"/>
+  <path d="M34 40 Q49 30 64 40 Q79 30 94 40" fill="none" stroke="#e0823d" stroke-width="3"/>
+  <path d="M34 40 L60 64 M94 40 L68 64 M64 40 L64 62" stroke="#3a3a3a" stroke-width="2"/>
+  <rect x="58" y="62" width="12" height="12" rx="3" fill="#e8553d"/>
+</svg>

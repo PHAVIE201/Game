@@ -1,0 +1,39 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/characters/game_character.gd" id="1_char"]
+[ext_resource type="Script" path="res://scripts/characters/character_model.gd" id="2_model"]
+[ext_resource type="Script" path="res://scripts/characters/player_controller.gd" id="3_ctrl"]
+[ext_resource type="Script" path="res://scripts/characters/third_person_camera.gd" id="4_cam"]
+[ext_resource type="Resource" path="res://resources/weapons/k7_rifle.tres" id="5_rifle"]
+
+[sub_resource type="CapsuleShape3D" id="capsule"]
+radius = 0.3
+height = 1.75
+
+[node name="Player" type="CharacterBody3D"]
+script = ExtResource("1_char")
+weapon_data = ExtResource("5_rifle")
+is_player = true
+display_name = "Bạn"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.875, 0)
+shape = SubResource("capsule")
+
+[node name="Model" type="Node3D" parent="."]
+script = ExtResource("2_model")
+
+[node name="PlayerController" type="Node" parent="."]
+script = ExtResource("3_ctrl")
+
+[node name="CameraRig" type="Node3D" parent="."]
+top_level = true
+script = ExtResource("4_cam")
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraRig"]
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig/SpringArm3D"]
+current = true
+fov = 75.0
+near = 0.05
+far = 1700.0

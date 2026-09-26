@@ -1,0 +1,130 @@
+class_name CombatState
+extends BotState
+## Fight the current target: aim with human-like error, shoot in bursts,
+## strafe, crouch / go prone, reload, chase when the target breaks line of sight.
+
+enum Tactic { HOLD, STRAFE, APPROACH, RETREAT }
+
+var _tactic: int = Tactic.HOLD
+var _tactic_timer := 0.0
+var _strafe_side := 1.0
+var _burst_left := 0
+var _burst_start_ammo := 0
+var _pause := 0.0
+
+
+func enter(_params: Dictionary) -> void:
+	brain.stop_moving()
+	_tactic_timer = 0.0
+	_burst_left = 0
+	_pause = 0.0
+
+
+func exit() -> void:
+	var c := get_character()
+	c.input_fire = false
+	c.input_aim = false
+	brain.direct_move = Vector3.ZERO
+
+
+func update(delta: float) -> void:
+	var c := get_character()
+	var t := brain.target
+	if t == null or t.is_dead:
+		brain.clear_target()
+		brain.fsm.change(&"idle")
+		return
+	var visible := brain.is_target_visible()
+	var lost_for := brain.time - brain.target_last_seen_time
+	if lost_for > 3.5:
+		# Lost sight: go check the last known position.
+		var last := brain.target_last_seen_pos
+		brain.clear_target()
+		brain.fsm.change(&"investigate", {"pos": last})
+		return
+
+	var aim_pt := brain.get_aim_point(delta)
+	brain.look_at_point(aim_pt)
+	var dist := c.global_position.distance_to(t.global_position)
+	c.input_aim = visible and dist > 12.0 and _tactic != Tactic.APPROACH
+
+	# ---- Shooting -------------------------------------------------------------
+	var reacted := brain.time - brain.target_first_seen_time > brain.profile.reaction_time + dist * 0.002
+	# Fire only when the gun points close enough to the (imperfect) aim point.
+	var tolerance := 0.02 + 0.6 / maxf(dist, 1.0)
+	var aligned := brain.aim_error_to(aim_pt) < tolerance
+	var fire := false
+	if c.weapon.ammo == 0 and not c.weapon.is_reloading():
+		c.request_reload()
+	elif visible and reacted and aligned and not c.weapon.is_reloading():
+		if _pause > 0.0:
+			_pause -= delta
+		else:
+			fire = true
+			if c.weapon.fire_mode != WeaponData.FireMode.AUTO:
+				c.cycle_fire_mode()
+	else:
+		_pause = maxf(_pause - delta, 0.0)
+	# Burst control: count shots through the ammo counter.
+	if fire:
+		if _burst_left <= 0:
+			_burst_left = brain.rng.randi_range(brain.profile.burst_min, brain.profile.burst_max)
+			if dist > 120.0:
+				_burst_left = brain.rng.randi_range(1, 2)
+			_burst_start_ammo = c.weapon.ammo
+		if _burst_start_ammo - c.weapon.ammo >= _burst_left:
+			_burst_left = 0
+			_pause = brain.rng.randf_range(0.25, 0.7) + dist * 0.003
+			fire = false
+	c.input_fire = fire
+
+	# ---- Movement / tactics ---------------------------------------------------------
+	_tactic_timer -= delta
+	if _tactic_timer <= 0.0:
+		_choose_tactic(dist, visible)
+	var to_target := t.global_position - c.global_position
+	to_target.y = 0.0
+	var fwd := to_target.normalized() if to_target.length_squared() > 0.01 else Vector3.FORWARD
+	var side := fwd.cross(Vector3.UP) * _strafe_side
+	match _tactic:
+		Tactic.HOLD:
+			brain.stop_moving()
+		Tactic.STRAFE:
+			brain.nav.stop()
+			brain.move_mode = BotBrain.MoveMode.RUN
+			brain.direct_move = side
+		Tactic.APPROACH:
+			if not brain.nav.active or brain.nav.destination.distance_to(brain.target_last_seen_pos) > 5.0:
+				brain.move_to(brain.target_last_seen_pos, BotBrain.MoveMode.RUN, 8.0)
+		Tactic.RETREAT:
+			brain.nav.stop()
+			brain.move_mode = BotBrain.MoveMode.RUN
+			brain.direct_move = (-fwd + side * 0.6).normalized()
+
+
+
+func _choose_tactic(dist: float, visible: bool) -> void:
+	var c := get_character()
+	var rng := brain.rng
+	_tactic_timer = rng.randf_range(0.9, 2.4)
+	_strafe_side = 1.0 if rng.randf() < 0.5 else -1.0
+	if not visible:
+		_tactic = Tactic.APPROACH
+	elif dist > 130.0:
+		_tactic = Tactic.APPROACH if rng.randf() < 0.5 else Tactic.HOLD
+	elif dist < 9.0:
+		_tactic = Tactic.RETREAT if rng.randf() < 0.5 else Tactic.STRAFE
+	else:
+		_tactic = Tactic.STRAFE if rng.randf() < 0.55 else Tactic.HOLD
+	if c.weapon.is_reloading() and _tactic == Tactic.HOLD:
+		_tactic = Tactic.STRAFE
+	# Stance: crouch or go prone when holding position.
+	if _tactic == Tactic.HOLD:
+		if dist > 90.0 and rng.randf() < 0.2:
+			c.request_stance(GameCharacter.Stance.PRONE)
+		elif rng.randf() < brain.profile.crouch_chance:
+			c.request_stance(GameCharacter.Stance.CROUCH)
+		else:
+			c.request_stance(GameCharacter.Stance.STAND)
+	else:
+		c.request_stance(GameCharacter.Stance.STAND)

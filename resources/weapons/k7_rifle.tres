@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"k7"
+display_name = "K7 Kestrel"
+ammo_type = &"ammo_rifle"
+model = &"rifle"
+damage = 36.0
+head_multiplier = 2.2
+torso_multiplier = 1.0
+limb_multiplier = 0.75
+falloff_start = 80.0
+falloff_end = 450.0
+falloff_min_factor = 0.7
+rounds_per_minute = 660.0
+fire_modes = Array[int]([1, 0])
+magazine_size = 30
+reload_time = 2.3
+muzzle_velocity = 850.0
+bullet_gravity = 9.8
+max_range = 900.0
+loudness_radius = 320.0
+spread_hip = 1.8
+spread_ads = 0.35
+spread_move = 1.6
+spread_air = 5.0
+spread_per_shot = 0.22
+spread_max_bloom = 3.0
+spread_recovery = 6.0
+crouch_spread_factor = 0.8
+prone_spread_factor = 0.6
+recoil_vertical = 0.75
+recoil_horizontal = 0.32
+recoil_recovery = 9.0
+ads_fov = 55.0
+ads_move_factor = 0.7
+tracer_color = Color(1, 0.8, 0.35, 1)
