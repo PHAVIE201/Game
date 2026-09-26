@@ -1,0 +1,253 @@
+# LAST DROP – Battle royale low-poly (Godot 4.7)
+
+Game battle royale 3D góc nhìn thứ ba, phong cách low-poly hoạt hình, lấy cảm hứng từ lối chơi
+PUBG nhưng **toàn bộ tên, hình ảnh và thiết kế đều tự làm**. Mọi thứ (địa hình, cây, nhà, nhân vật,
+súng, âm thanh) đều được **sinh bằng code** trong Godot. Không dùng model, texture hay file âm thanh
+bên ngoài.
+
+> Trạng thái: **Giai đoạn 1/4 – Nền móng** (đã xong).
+> Bản đồ: *Đảo Mây* (sinh theo seed) · Súng: *K7 Kestrel* · Engine: Godot **4.7.2 Standard (GDScript)**
+
+![Gameplay](docs/screenshots/gameplay.jpg)
+
+| | |
+|---|---|
+| ![Làng](docs/screenshots/town.jpg) | ![Rừng](docs/screenshots/forest.jpg) |
+| ![Ngắm bắn](docs/screenshots/aiming.jpg) | ![Bot nằm bắn](docs/screenshots/bot_prone.jpg) |
+| ![Màn hình chết](docs/screenshots/death_screen.jpg) | ![Menu](docs/screenshots/main_menu.jpg) |
+
+Các tư thế hoạt họa (sinh hoàn toàn bằng code):
+![Tư thế](docs/screenshots/poses.jpg)
+
+---
+
+## 1. Cách mở dự án
+
+1. Tải **Godot 4.7.2 Standard** (bản thường, *không* phải .NET): <https://godotengine.org/download/archive/4.7.2-stable/>
+2. Mở Godot → **Project Manager** → **Import** → chọn file `project.godot` trong thư mục này →
+   **Import & Edit**.
+3. Lần mở đầu tiên Godot sẽ import dự án (vài giây).
+4. Nhấn **F5** (Run Project) để vào menu chính, chọn số bot / seed bản đồ, rồi bấm **BẮT ĐẦU**.
+   - Mỗi lần vào trận, đảo được sinh lại theo seed. Máy tầm trung mất khoảng **4 giây** (có màn hình loading).
+   - Muốn vào thẳng trận (bỏ qua menu): mở `scenes/game/game.tscn` rồi nhấn **F6**.
+
+Renderer: **Forward+** (Vulkan / D3D12 / Metal). Card đồ họa rất cũ không có Vulkan thì đổi sang
+*Compatibility* trong `Project Settings > Rendering > Renderer`. Chế độ đó chưa được tối ưu cho game này.
+
+## 2. Điều khiển
+
+| Phím | Hành động |
+|---|---|
+| **W A S D** | Di chuyển |
+| **Shift** (giữ) | Chạy nhanh (chỉ khi đi tới, không ngắm / bắn) |
+| **Ctrl** (giữ) | Đi bộ chậm |
+| **Space** | Nhảy (khi đang ngồi / nằm thì đứng dậy) |
+| **C** | Ngồi / đứng |
+| **Z** | Nằm / đứng |
+| **Chuột** | Xoay camera |
+| **Chuột trái** | Bắn |
+| **Chuột phải** (giữ) | Ngắm (zoom qua vai, đạn chụm hơn, đi chậm hơn) |
+| **R** | Nạp đạn (bắn khi hết đạn cũng tự nạp) |
+| **B** | Đổi chế độ bắn: tự động / phát một |
+| **Esc** | Tạm dừng (chỉnh độ nhạy chuột, đồ họa, về menu) |
+| **F3** | Bật / tắt bảng hiệu năng (FPS, draw call, tam giác, thời gian vật lý) |
+
+Có thể đổi phím trong `Project Settings > Input Map`. Các phím **F** (nhặt đồ), **Tab** (túi đồ), **M** (bản đồ)
+đã được khai báo sẵn cho giai đoạn sau.
+
+## 3. Những gì đã làm được (Giai đoạn 1)
+
+**Bản đồ (sinh bằng thuật toán)**
+- Đảo khoảng 2 × 2 km (lưới độ cao 513 × 513, ô 4 m). Có đồi thoai thoải, 2–3 khối núi có sống núi,
+  đồng cỏ phẳng, bãi cát, một **con sông** uốn khúc cắt ngang đảo và 1–2 **hồ**. Biển bao quanh,
+  có tường vô hình ở mép bản đồ.
+- Khoảng 6 làng và vài trang trại (khoảng 50–60 căn nhà với seed 1337): nhà nhỏ, nhà dài 2 phòng,
+  nhà kho, lán. Có **cửa ra vào và cửa sổ để đi vào / bắn qua**, mái, ống khói, bàn giường, thùng
+  gỗ, thùng phuy làm vật che chắn. Nền nhà được san phẳng tự động.
+- Khoảng 18 000 cây (thông, sồi, bạch dương), 6 000 bụi, 900 tảng đá, dùng **MultiMesh** chia ô
+  128 m và 2 mức LOD, có gió lay trong shader. Thân cây và đá có va chạm (chắn đạn), nhưng không tạo
+  node cho từng cây.
+- Nước hoạt hình: màu theo độ sâu, bọt ở bờ, gợn sóng. Có thể **lội và bơi**.
+- Cùng một seed luôn cho ra cùng một hòn đảo (xem `docs/screenshots/map_seed1337.jpg`).
+
+**Nhân vật (dùng chung cho người chơi và bot)**
+- Góc nhìn thứ ba qua vai. Hỗ trợ đi, chạy, chạy nhanh, nhảy, ngồi, nằm, bơi. Camera có
+  spring-arm nên không xuyên tường.
+- Nhân vật low-poly là **1 mesh skinned duy nhất** (1 draw call). Hoạt họa thủ tục: chu kỳ bước
+  chân, chuyển tư thế mượt, **IK hai khớp** giữ tay luôn trên súng và chân chạm đất, động tác nạp
+  đạn, chạy nhanh bế súng chéo, ngã khi chết.
+- Mỗi bot mặc quần áo, màu da, mũ ngẫu nhiên.
+
+**Bắn súng**
+- Súng trường *K7 Kestrel* với thông số trong `resources/weapons/k7_rifle.tres`:
+  - Sát thương 36. Nhân hệ số theo bộ phận: **đầu ×2.2**, **thân ×1.0**, **tay/chân ×0.75**.
+  - Băng đạn 30, tốc độ bắn 660 phát/phút, nạp đạn 2.3 giây.
+- Đạn bay có vận tốc 850 m/s và rơi theo trọng lực. Sát thương giảm theo khoảng cách. Có vệt đạn
+  (tracer) và âm thanh khi đạn sượt qua người chơi.
+- Súng giật tích lũy dần: người chơi phải ghì chuột xuống khi xả đạn. Độ tỏa đạn nở ra khi bắn
+  liên tục, khi di chuyển hoặc nhảy, và thu hẹp khi ngắm, ngồi hoặc nằm. Tâm ngắm co giãn theo
+  đúng độ tỏa này.
+- Hitbox dạng capsule bám theo xương: đầu, thân, tay, chân (nằm xuống thì hitbox cũng nằm theo).
+- Hiệu ứng trúng đích: bụi đất, dăm gỗ, đá vụn, vụn tường, "máu" hoạt hình, bọt nước; lỗ đạn trên
+  tường; hit marker (trắng thường, vàng khi trúng đầu, đỏ khi hạ gục) và âm thanh riêng.
+
+**Bot (AI máy trạng thái)**
+- `BotBrain` gồm 4 phần:
+  - **Perception**: tầm nhìn có góc nhìn và kiểm tra tầm nhìn thẳng. Kẻ địch đang ngồi hoặc nằm
+    khó bị phát hiện hơn. Bot nghe được tiếng súng.
+  - **StateMachine**: các trạng thái Idle → Wander → Investigate → Combat.
+  - **Navigator**: né cây, tường, nước và tự gỡ kẹt.
+  - **Aim**: có thời gian phản xạ, sai số ngắm giảm dần khi bám mục tiêu, tự ghì súng giật, bắn
+    theo loạt.
+- Khi giao chiến, bot biết chạy ngang, lùi, áp sát, ngồi hoặc nằm bắn, nạp đạn, và đuổi theo vị trí
+  cuối cùng nhìn thấy mục tiêu.
+- Ba mức độ khó. Bot đánh cả nhau theo luật battle royale. Số bot chọn từ 1 đến 63 (mặc định 8).
+
+**HUD và luồng trận**
+- Thanh máu (có vệt máu vừa mất), đạn trong băng / đạn dự trữ, chế độ bắn, tư thế, tâm ngắm động.
+- La bàn tiếng Việt (B, Đ, N, T), số người còn sống, số kẻ bị hạ, bảng hạ gục (kill feed), chỉ báo
+  hướng bị bắn, viền đỏ khi trúng đạn.
+- Màn hình chết / chiến thắng: hạng, số kẻ bị hạ, sát thương gây ra, thời gian sống sót, ai hạ bạn,
+  bằng súng gì, có trúng đầu không, từ bao xa. Có nút **CHƠI LẠI**: đấu lại ngay trên cùng hòn đảo,
+  không phải sinh lại bản đồ. Ngoài ra có menu chính, menu tạm dừng và màn hình loading.
+- Toàn bộ âm thanh được tổng hợp bằng code: tiếng súng (xa thì bị lọc trầm), nạp đạn, trúng đích,
+  bước chân, đạn sượt qua.
+
+## 4. Kiến trúc
+
+```
+Main (scenes/main)  ── MainMenu, LoadingScreen
+ └─ GameSession (scenes/game/game.tscn)         đăng ký dịch vụ vào autoload `Game`
+     ├─ WorldEnvironment, Sun
+     ├─ GameWorld        HeightMap → Settlements → TerrainBuilder → Vegetation → nước
+     ├─ Characters       các GameCharacter (Player.tscn / Bot.tscn)
+     ├─ ProjectileSystem đạn dạng dữ liệu + tracer MultiMesh
+     ├─ FxManager        pool hiệu ứng / decal
+     ├─ MatchManager     spawn, đếm người sống, thắng/thua, chơi lại
+     └─ HUD, EndScreen, PauseMenu
+
+Autoload: Events (signal bus) · Game (service locator) · Settings (lưu cấu hình) · Sfx (âm thanh)
+```
+
+**Ý tưởng chính: một thân, nhiều bộ não.** `GameCharacter` chỉ biết *cách* di chuyển và bắn. Việc
+*làm gì* do một controller ghi vào các biến "ý định": `input_move`, `aim_yaw`, `input_fire`...
+Controller đó là `PlayerController` (bàn phím + chuột) hoặc `BotBrain` (AI). Vì vậy mọi tính năng
+sau này (túi đồ, giáp, hồi máu, nhảy dù, lái xe) chỉ cần viết một lần là cả người lẫn bot dùng
+được.
+
+```
+scenes/            main/ game/ characters/ ui/        (các scene .tscn)
+scripts/
+  autoload/        events, game, settings, sfx
+  core/            game_session, match_manager, match_config, layers, mesh_builder, name_generator
+  world/           game_world, height_map, terrain_builder, settlements, vegetation
+  characters/      game_character, character_model, character_hitboxes, player_controller,
+                   third_person_camera, inventory
+  weapons/         weapon_data (Resource), weapon, projectile_system, weapon_models, damage_info
+  ai/              bot_brain, bot_perception, bot_navigator, bot_profile, state_machine, bot_state
+  ai/states/       idle, wander, investigate, combat
+  fx/  ui/  debug/ (automation cho test headless)
+resources/         weapons/k7_rifle.tres, ui/theme.tres
+shaders/           foliage, water, tracer
+tools/             công cụ kiểm tra headless (xem mục 6)
+```
+
+**Điểm mở rộng đã chuẩn bị cho các giai đoạn sau**
+
+| Giai đoạn | Chỗ gắn vào |
+|---|---|
+| 2 – Máy bay, nhảy dù, bo, loot | `MatchManager.State` (thêm `PLANE`/`DROPPING`), `GameWorld.get_loot_points()` (đã có sẵn điểm loot trong mỗi nhà), `Inventory`, `GameCharacter._modify_incoming_damage()` (giáp/mũ) |
+| 2 – Nhiều súng, ống ngắm, lựu đạn, bom khói | Thêm file `WeaponData` .tres + model trong `WeaponModels`; `DamageInfo` dùng chung cho nổ / bo |
+| 3 – 63 bot thông minh hơn | Thêm `BotState` mới (Loot, Heal, MoveToZone, Parachute...) vào `BotBrain._build_states()`. Đã có sẵn LOD cho AI và vật lý (xem mục 5) |
+| 4 – Tối ưu | Map dạng chunk, LOD sẵn có; `make_map_image()` dùng cho bản đồ nhỏ; lớp vật lý `VEHICLES`, `ITEMS` đã khai báo |
+
+## 5. Hiệu năng (thiết kế cho máy tầm trung)
+
+- **Forward+**, tắt các hiệu ứng đắt (SDFGI, SSR, volumetric fog). Bóng đổ từ mặt trời dùng 2 split,
+  xa 120 m. Có 3 mức đồ họa trong menu:
+  - **Thấp**: render scale 0.77 (upscale bằng FSR), bóng gần, tầm nhìn cây ×0.65.
+  - **Trung bình**: FXAA.
+  - **Cao**: SMAA, SSAO, bóng 4 split, tầm nhìn ×1.35.
+- **Địa hình**: 256 chunk, 2 mức LOD chuyển bằng `visibility_range` (không tốn script mỗi frame). Có
+  "váy" che khe hở giữa các chunk. Có occluder thô chìm dưới đất để cắt cây / nhà nằm sau đồi.
+- **Va chạm**: dùng 1 `HeightMapShape3D` duy nhất cho cả đảo, chạy trên **Jolt Physics**. Tam giác
+  của mesh hiển thị được chia **giống hệt** tam giác va chạm (đã kiểm chứng bằng raycast) nên chân
+  không lún, không lơ lửng.
+- **Cây**: MultiMesh theo ô, dựng bằng buffer thô. Va chạm tạo thẳng trên `PhysicsServer3D`
+  (mỗi ô 1 body), không có node cho từng cây.
+- **Nhân vật**: 1 draw call cho mỗi người. Hoạt họa cập nhật thưa dần theo khoảng cách hoặc khi
+  ngoài màn hình. Hitbox là toán học thuần, không cần physics body cho từng bộ phận.
+- **Đạn**: mô phỏng dạng dữ liệu. Có lưới không gian để mỗi viên chỉ kiểm tra nhân vật ở gần.
+  Toàn bộ tracer vẽ bằng 1 MultiMesh. Hiệu ứng và decal dùng pool.
+- **LOD cho mô phỏng**: bot ở xa camera (hơn 120 m / 300 m) chỉ "suy nghĩ" mỗi 2 / 4 tick vật lý.
+  Bot xa hơn 230 m bỏ `move_and_slide` và chỉ bám theo mặt đất.
+
+Số đo trên máy ảo dùng để phát triển (CPU cloud, **không có GPU thật**):
+
+| Hạng mục | Kết quả |
+|---|---|
+| Sinh đảo (seed 1337) | khoảng 3.8–4.4 giây |
+| Vẽ mỗi frame (cảnh thường, mức Trung bình) | khoảng 300–400 draw call, 200–290 nghìn tam giác |
+| Bước vật lý + AI + đạn, 8 bot | khoảng 3–5 ms (tùy trận đánh) |
+| Bước vật lý + AI + đạn, 63 bot (gần như tất cả đang đánh nhau) | khoảng 12 ms (sẽ tối ưu thêm ở giai đoạn 4) |
+| Độ chính xác của bot mức Thường (bắn vào mục tiêu đứng yên) | 10 m: 43% · 25 m: 30% · 50 m: 18% · 100 m: 9% |
+
+FPS trên card đồ họa thật **chưa đo được** vì máy ảo chỉ có renderer phần mềm. Xem mục 7.
+
+## 6. Kiểm tra tự động (headless)
+
+Tất cả chạy được mà không cần cửa sổ hay GPU:
+
+```bash
+GODOT=/đường/dẫn/Godot_v4.7.2-stable_linux.x86_64 tools/check_project.sh
+```
+
+Script này làm 4 bước:
+1. Import dự án.
+2. Load mọi script, scene, resource, shader (`tools/validate.tscn`).
+3. Lấy lỗi và **cảnh báo** GDScript đúng như editor báo (`tools/lsp_diagnostics.py`). Kết quả hiện
+   tại: **0 lỗi, 0 cảnh báo**.
+4. Chạy thử một trận có autopilot (`--autotest`): bắn, đổi tư thế, bơi, tạm dừng, chơi lại, thua,
+   thắng, về menu.
+
+Các lệnh lẻ khác:
+
+```bash
+godot --headless --path . -- --autotest=40 --bots=8        # chạy thử trận
+godot --headless --path . -- --duel=10,25,50,100 --bots=3  # đo độ chính xác của bot
+godot --headless --path . res://tools/worldgen_test.tscn -- 1337 map.png   # xuất bản đồ PNG theo seed
+godot --path . -- --screenshots=out_dir                    # chụp màn hình các cảnh (cần GPU/xvfb)
+godot --path . res://tools/pose_gallery.tscn -- poses.png  # ảnh tổng hợp các tư thế
+```
+
+## 7. Hạn chế đã biết (để dành cho các giai đoạn sau)
+
+- Chưa có máy bay, nhảy dù, bo, loot, túi đồ, giáp, hồi máu. Người chơi bắt đầu ở một quảng trường
+  làng với 30 + 210 viên đạn. Bot xuất hiện trong bán kính khoảng 380 m (bo tạm thời: bot có xu
+  hướng đi về phía người chơi).
+- Bot đi bằng lái hướng (steering), không dùng navmesh, nên đôi khi lúng túng ở góc nhà. Bot nhìn
+  xuyên được tán cây / bụi (chỉ thân cây và tường chặn tầm nhìn).
+- Nhà hiện chỉ có 1 tầng. Chưa có đường sá, cầu, xe cộ.
+- Chưa có góc nhìn thứ nhất và chưa có ngắm qua ống ngắm (sẽ làm cùng hệ thống ống ngắm).
+- Với 63 bot, CPU vẫn còn khá nặng (xem mục 5).
+
+## 8. Những điểm cần bạn chơi thử và phản hồi
+
+1. **Hiệu năng**: bấm **F3**, cho mình biết FPS, cấu hình máy (CPU/GPU) và mức đồ họa đang dùng. Nhờ
+   thử thêm với 8, 20 và 63 bot. Máy có bị giật lúc mới vào trận (khi sinh đảo) không?
+2. **Cảm giác điều khiển**: tốc độ đi / chạy / nhảy, độ nhạy chuột mặc định, khoảng cách camera,
+   vị trí camera khi ngắm (chuột phải).
+3. **Cảm giác bắn**: súng giật có quá nhẹ / quá nặng không, độ tỏa khi bắn từ hông, tâm ngắm có
+   khớp với chỗ đạn trúng không, đạn rơi khi bắn xa có hợp lý không.
+4. **Độ khó của bot**: mức Dễ / Thường / Khó có hợp lý không, bot có "bắn xuyên" hay nhìn thấy mình
+   quá sớm không, có con nào đứng ngây ra hoặc kẹt ở đâu không.
+5. **Bản đồ**: thử vài seed. Đảo có đẹp không? Mật độ cây (quá dày / quá thưa), kích thước núi,
+   sông hồ, số làng và số nhà. Có chỗ nào nhân vật bị kẹt hay rơi xuyên đất không?
+6. **Nhà**: có vào được mọi cửa không, có cửa sổ nào bắn qua bị lỗi không, trong nhà có bị tối quá
+   không.
+7. **Tư thế và hoạt họa**: ngồi, nằm, bơi, nạp đạn, ngã khi chết. Có tư thế nào trông kỳ không (đặc
+   biệt khi chạy xuống dốc)?
+8. **HUD / giao diện**: la bàn chữ Việt (B / Đ / N / T) có dễ đọc không, hay bạn muốn dùng N / E / S / W?
+   Cỡ chữ, vị trí thanh máu và số đạn.
+9. **Âm thanh**: âm thanh tổng hợp bằng code có chấp nhận được không, hay giai đoạn sau nên làm kỹ hơn?
+10. **Phong cách hình ảnh**: màu sắc, ánh sáng, sương mù xa. Bạn muốn tươi hơn, ấm hơn hay dịu hơn?

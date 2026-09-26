@@ -25,7 +25,7 @@ static func _build_rifle() -> Dictionary:
 	var mb := MeshBuilder.new()
 	var metal := Color(0.2, 0.21, 0.23)
 	var dark := Color(0.12, 0.12, 0.13)
-	var tan := Color(0.74, 0.63, 0.45)
+	var sand := Color(0.74, 0.63, 0.45)
 	var accent := Color(0.95, 0.5, 0.15)
 	# Receiver
 	mb.add_box(Vector3(0, 0.03, -0.12), Vector3(0.07, 0.11, 0.42), metal)
@@ -35,7 +35,7 @@ static func _build_rifle() -> Dictionary:
 	mb.add_box(Vector3(0, 0.05, -0.55), Vector3(0.028, 0.028, 0.42), dark)
 	mb.add_box(Vector3(0, 0.05, -0.77), Vector3(0.046, 0.046, 0.07), dark)
 	# Handguard
-	mb.add_box(Vector3(0, 0.035, -0.42), Vector3(0.08, 0.09, 0.26), tan)
+	mb.add_box(Vector3(0, 0.035, -0.42), Vector3(0.08, 0.09, 0.26), sand)
 	# Top rail and sights
 	mb.add_box(Vector3(0, 0.094, -0.18), Vector3(0.03, 0.016, 0.4), dark)
 	mb.add_box(Vector3(0, 0.12, -0.0), Vector3(0.032, 0.04, 0.03), dark)
@@ -43,9 +43,9 @@ static func _build_rifle() -> Dictionary:
 	# Magazine (tilted forward)
 	mb.add_box(Vector3(0, -0.11, -0.2), Vector3(0.05, 0.2, 0.085), dark, Basis(Vector3.RIGHT, -0.25))
 	# Pistol grip (tilted back)
-	mb.add_box(Vector3(0, -0.07, 0.03), Vector3(0.045, 0.13, 0.06), tan, Basis(Vector3.RIGHT, 0.3))
+	mb.add_box(Vector3(0, -0.07, 0.03), Vector3(0.045, 0.13, 0.06), sand, Basis(Vector3.RIGHT, 0.3))
 	# Stock + butt pad
-	mb.add_box(Vector3(0, 0.0, 0.22), Vector3(0.05, 0.1, 0.26), tan)
+	mb.add_box(Vector3(0, 0.0, 0.22), Vector3(0.05, 0.1, 0.26), sand)
 	mb.add_box(Vector3(0, -0.01, 0.36), Vector3(0.06, 0.14, 0.03), dark)
 	var mat := MeshBuilder.make_vertex_color_material(0.55)
 	return {

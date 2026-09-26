@@ -130,11 +130,11 @@ func _add_instance(rng: RandomNumberGenerator, kind: int, pos: Vector3) -> void:
 	# Quantized scale so collision shapes can be shared between instances.
 	var bucket := rng.randi_range(0, 3)
 	var s := 0.78 + bucket * 0.17
-	var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(Vector3(s, s * rng.randf_range(0.92, 1.1), s))
+	var rot := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(Vector3(s, s * rng.randf_range(0.92, 1.1), s))
 	if kind == Kind.ROCK:
-		basis = Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(Vector3(s * 1.3, s, s * 1.1))
+		rot = Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(Vector3(s * 1.3, s, s * 1.1))
 	var sink := 0.35 if kind != Kind.ROCK else 0.5 * s
-	var xf := Transform3D(basis, pos - origin - Vector3(0, sink, 0))
+	var xf := Transform3D(rot, pos - origin - Vector3(0, sink, 0))
 	var tint := Color(rng.randf_range(0.85, 1.12), rng.randf_range(0.88, 1.1), rng.randf_range(0.8, 1.05), rng.randf())
 	_cells[cz * GRID + cx][kind].append([xf, tint, bucket])
 	match kind:
@@ -171,6 +171,7 @@ func build_cells(from: int, to: int, view_scale: float) -> void:
 	var space := get_world_3d().space
 	for c in range(from, mini(to, GRID * GRID)):
 		var cx := c % GRID
+		@warning_ignore("integer_division")
 		var cz := c / GRID
 		var origin := _cell_origin(cx, cz)
 		var wood_body := RID()
