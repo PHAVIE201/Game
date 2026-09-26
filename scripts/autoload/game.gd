@@ -11,6 +11,7 @@ var world: GameWorld = null
 var projectiles: ProjectileSystem = null
 var fx: FxManager = null
 var match_manager: MatchManager = null
+var loot: LootManager = null
 ## The local human player (null when dead characters are cleaned up / no match).
 var player: GameCharacter = null
 ## Active camera used for LOD decisions (animation, audio, etc.).
@@ -27,6 +28,7 @@ func clear() -> void:
 	projectiles = null
 	fx = null
 	match_manager = null
+	loot = null
 	player = null
 	camera = null
 

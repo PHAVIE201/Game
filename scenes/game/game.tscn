@@ -8,6 +8,8 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="6_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/end_screen.tscn" id="7_end"]
 [ext_resource type="PackedScene" path="res://scenes/ui/pause_menu.tscn" id="8_pause"]
+[ext_resource type="Script" path="res://scripts/items/loot_manager.gd" id="9_loot"]
+[ext_resource type="Script" path="res://scripts/ui/inventory_screen.gd" id="10_inv"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.28, 0.55, 0.92, 1)
@@ -72,6 +74,9 @@ script = ExtResource("3_proj")
 [node name="Fx" type="Node3D" parent="."]
 script = ExtResource("4_fx")
 
+[node name="Loot" type="Node3D" parent="."]
+script = ExtResource("9_loot")
+
 [node name="Match" type="Node" parent="."]
 script = ExtResource("5_match")
 characters_root_path = NodePath("../Characters")
@@ -79,5 +84,8 @@ characters_root_path = NodePath("../Characters")
 [node name="HUD" parent="." instance=ExtResource("6_hud")]
 
 [node name="EndScreen" parent="." instance=ExtResource("7_end")]
+
+[node name="InventoryScreen" type="CanvasLayer" parent="."]
+script = ExtResource("10_inv")
 
 [node name="PauseMenu" parent="." instance=ExtResource("8_pause")]

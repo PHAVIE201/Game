@@ -37,6 +37,8 @@ func start_match(p_config: MatchConfig) -> void:
 	_rng.randomize()
 	_player_result_sent = false
 	var world := Game.world
+	if Game.loot != null:
+		Game.loot.spawn_world_loot(world, _rng)
 
 	# Player: start in a random town square (open area by design).
 	var player_pos: Vector3
@@ -86,12 +88,12 @@ func _give_starting_kit(c: GameCharacter) -> void:
 	var primaries: Array[WeaponData] = [WeaponDB.K7, WeaponDB.V9, WeaponDB.B12, WeaponDB.D3, WeaponDB.R8]
 	var weights: Array[float] = [0.32, 0.24, 0.16, 0.15, 0.13]
 	if c.is_player:
-		c.give_weapon(WeaponDB.P1, -1, false)
-		c.give_weapon(primaries[1 + _rng.randi() % (primaries.size() - 1)], -1, false)
-		c.give_weapon(WeaponDB.K7)
-		for w in WeaponDB.GUNS:
-			c.inventory.add_ammo(w.ammo_type, 90 if w.ammo_type != WeaponDB.K7.ammo_type else 210)
+		# A pistol to defend yourself while looting the town.
+		c.give_weapon(WeaponDB.P1)
+		c.inventory.add_ammo(WeaponDB.P1.ammo_type, 30)
 		return
+	# Bots cannot loot yet: they start armed, with endless ammo.
+	c.inventory.unlimited = true
 	var main := primaries[_weighted_pick(weights)]
 	c.give_weapon(main)
 	c.inventory.add_ammo(main.ammo_type, 9999)
@@ -132,6 +134,8 @@ func clear() -> void:
 		Game.projectiles.clear()
 	if Game.fx != null:
 		Game.fx.clear()
+	if Game.loot != null:
+		Game.loot.clear()
 
 
 func get_alive_count() -> int:
@@ -147,6 +151,8 @@ func _on_character_died(victim_node: Node, info_ref: RefCounted) -> void:
 	if victim == null or not alive.has(victim):
 		return
 	alive.erase(victim)
+	if Game.loot != null:
+		Game.loot.drop_everything(victim)
 	var info := info_ref as DamageInfo
 	Events.alive_count_changed.emit(alive.size(), participants.size())
 	if state != State.IN_PROGRESS:

@@ -18,12 +18,16 @@ const STANCE_NAMES := ["ĐỨNG", "NGỒI", "NẰM"]
 @onready var perf_label: Label = $Root/PerfLabel
 @onready var hint_label: Label = $Root/HintLabel
 @onready var vignette: TextureRect = $Root/DamageVignette
+@onready var pickup_prompt: Label = $Root/PickupPrompt
+@onready var loot_label: Label = $Root/LootMessage
 
 var _msg_time := 0.0
 var _hint_time := 25.0
 var _perf_timer := 0.0
 var _vignette := 0.0
 var _last_state: Array = []
+var _loot_time := 0.0
+var _prompt_key: Variant = null
 
 
 func _ready() -> void:
@@ -31,6 +35,9 @@ func _ready() -> void:
 	Events.character_died.connect(_on_character_died)
 	Events.alive_count_changed.connect(_on_alive_count_changed)
 	Events.hud_message.connect(show_message)
+	Events.loot_message.connect(_on_loot_message)
+	pickup_prompt.visible = false
+	loot_label.modulate.a = 0.0
 	center_label.modulate.a = 0.0
 	perf_label.visible = Settings.show_fps
 	vignette.modulate.a = 0.0
@@ -52,7 +59,8 @@ func show_message(text: String, duration: float) -> void:
 func _process(delta: float) -> void:
 	var p := Game.player
 	var has_player := p != null and is_instance_valid(p)
-	$Root.visible = has_player
+	var session := Game.session as GameSession
+	$Root.visible = has_player and not (session != null and session.inventory_screen.is_open())
 	if not has_player:
 		return
 
@@ -87,6 +95,11 @@ func _process(delta: float) -> void:
 		low = 0.25 + 0.1 * sin(Time.get_ticks_msec() * 0.006)
 	vignette.modulate.a = maxf(_vignette, low)
 
+	_update_pickup_prompt()
+	if _loot_time > 0.0:
+		_loot_time -= delta
+		loot_label.modulate.a = clampf(_loot_time / 0.5, 0.0, 1.0)
+
 	# Center message fade.
 	if _msg_time > 0.0:
 		_msg_time -= delta
@@ -102,6 +115,29 @@ func _process(delta: float) -> void:
 		if _perf_timer <= 0.0:
 			_perf_timer = 0.25
 			_update_perf()
+
+
+func _update_pickup_prompt() -> void:
+	var target: LootManager.Pickup = Game.loot.player_target if Game.loot != null else null
+	var key: Variant = null
+	if target != null:
+		key = [target.get_instance_id(), target.count]
+	if key == _prompt_key:
+		return
+	_prompt_key = key
+	pickup_prompt.visible = target != null
+	if target != null:
+		var text := "[F]  Nhặt  " + target.label()
+		if ItemDB.kind_of(target.id) == ItemDB.Kind.WEAPON:
+			var data := WeaponDB.get_weapon(target.id)
+			text += "  (%s)" % WeaponDB.category_name(data.category)
+		pickup_prompt.text = text
+
+
+func _on_loot_message(text: String) -> void:
+	loot_label.text = text
+	_loot_time = 2.2
+	loot_label.modulate.a = 1.0
 
 
 func _update_perf() -> void:

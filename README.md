@@ -52,11 +52,12 @@ Renderer: **Forward+** (Vulkan / D3D12 / Metal). Card đồ họa rất cũ khô
 | **1 / 2 / 3** | Cầm súng chính 1 / súng chính 2 / súng lục |
 | **Lăn chuột** | Đổi sang súng kế tiếp / trước đó |
 | **X** | Cất súng (tay không, chuột trái để đấm) |
+| **F** | Nhặt món đồ đang nhìn vào (có dòng nhắc ở giữa màn hình) |
+| **Tab** | Mở / đóng túi đồ (nhặt, bỏ đồ, cầm súng bằng chuột) |
 | **Esc** | Tạm dừng (chỉnh độ nhạy chuột, đồ họa, về menu) |
 | **F3** | Bật / tắt bảng hiệu năng (FPS, draw call, tam giác, thời gian vật lý) |
 
-Có thể đổi phím trong `Project Settings > Input Map`. Các phím **F** (nhặt đồ), **Tab** (túi đồ), **M** (bản đồ)
-đã được khai báo sẵn cho giai đoạn sau.
+Có thể đổi phím trong `Project Settings > Input Map` (hoặc sửa `tools/setup_input.gd` rồi chạy lại).
 
 ## 3. Những gì đã làm được (Giai đoạn 1)
 
@@ -137,8 +138,21 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
 - Tiếng súng riêng cho từng loại. Tâm ngắm của súng săn là vòng tròn đúng bằng vùng tỏa chì.
 - Bot chọn súng hợp với khoảng cách (súng săn / tiểu liên thì áp sát, bắn tỉa thì giữ khoảng cách, đổi
   sang súng lục khi địch quá gần), bắn phát một đúng nhịp với súng không tự động.
-- Tạm thời (cho đến khi có loot): người chơi bắt đầu với K7, một súng chính ngẫu nhiên và P1; bot có
-  một súng chính ngẫu nhiên, 50% có thêm súng lục.
+
+**2.2 Loot, nhặt đồ, túi đồ** ✔
+- Mỗi trận, khoảng 80% điểm loot trong nhà (≈190 điểm với seed 1337) được rải đồ ngẫu nhiên: súng (nằm
+  trên sàn, băng đạn rỗng, kèm 1–2 hộp đạn đúng loại), hộp đạn, balo cấp 1–3. Khoảng 250–300 món mỗi trận.
+- Đồ nằm đất là dữ liệu + 1 mesh đơn giản, chỉ hiện trong 85 m; có lưới không gian để tìm đồ gần.
+- **F** nhặt món đang nhìn vào (không nhặt xuyên tường). Nhặt súng khi đã đủ 2 súng chính thì súng đang
+  cầm được đổi ra đất (giữ nguyên số đạn trong băng).
+- **Túi đồ theo sức chứa**: không balo 80, balo cấp 1/2/3 thêm 100/150/200. Đạn có trọng lượng (5.8 mm 0.5,
+  9 mm 0.4, 12G 1.25, 7.6 mm 1.0). Túi đầy thì chỉ nhặt được một phần.
+- **Tab** mở màn hình túi đồ: cột *Mặt đất* (đồ trong 3 m), *Balo* (thanh sức chứa, bỏ đồ), *Trang bị*
+  (3 ô súng, cầm / bỏ súng, bỏ balo).
+- Khi chết, mọi thứ rơi ra quanh xác để người khác nhặt.
+- Người chơi bắt đầu chỉ với súng lục P1 + 30 viên và phải tự đi nhặt. Bot tạm thời vẫn xuất phát với một
+  súng chính ngẫu nhiên và đạn không giới hạn (bot biết nhặt đồ ở giai đoạn 3); khi chết bot rơi súng và
+  vài hộp đạn.
 
 ## 4. Kiến trúc
 
@@ -150,8 +164,9 @@ Main (scenes/main)  ── MainMenu, LoadingScreen
      ├─ Characters       các GameCharacter (Player.tscn / Bot.tscn)
      ├─ ProjectileSystem đạn dạng dữ liệu + tracer MultiMesh
      ├─ FxManager        pool hiệu ứng / decal
+     ├─ LootManager      đồ nằm đất, luật nhặt / bỏ / rơi đồ khi chết
      ├─ MatchManager     spawn, đếm người sống, thắng/thua, chơi lại
-     └─ HUD, EndScreen, PauseMenu
+     └─ HUD, InventoryScreen, EndScreen, PauseMenu
 
 Autoload: Events (signal bus) · Game (service locator) · Settings (lưu cấu hình) · Sfx (âm thanh)
 ```
@@ -170,6 +185,7 @@ scripts/
   world/           game_world, height_map, terrain_builder, settlements, vegetation
   characters/      game_character, character_model, character_hitboxes, player_controller,
                    third_person_camera, inventory
+  items/           item_db (danh mục đồ), item_models, loot_manager (đồ nằm đất + luật nhặt/bỏ)
   weapons/         weapon_data (Resource), weapon_db, weapon, projectile_system, weapon_models, damage_info
   ai/              bot_brain, bot_perception, bot_navigator, bot_profile, state_machine, bot_state
   ai/states/       idle, wander, investigate, combat

@@ -171,6 +171,10 @@ func _run_autotest(delta: float) -> void:
 		2:
 			if _t > duration * 0.8:
 				print("[auto] end screen visible after death: %s" % s.end_screen.visible)
+				var dropped := Game.loot.find_near(Game.player.global_position, 2.0).size()
+				print("[auto] death drop: %d pickups around the body" % dropped)
+				if dropped == 0:
+					_checks_failed.append("nothing dropped on death")
 				print("[auto] --- restart + force victory ---")
 				s.restart_match()
 				_stats.restarts += 1
@@ -266,6 +270,7 @@ func _weapon_check() -> void:
 	p.cycle_weapon(1)
 	await _wait(GameCharacter.SWAP_TIME + 0.1)
 	print("[auto] weapon check: ", " ".join(report), " active=", p.weapon_data.id)
+	await _loot_check(p)
 	Events.character_damaged.disconnect(on_dmg)
 	p.input_aim = false
 	p.max_health = 100.0
@@ -274,6 +279,55 @@ func _weapon_check() -> void:
 	dummy.health = 100.0
 	dummy_brain.set_physics_process(true)
 	_weapon_check_state = 2
+
+
+## Loot rules: world loot exists, pick up / capacity / drop / inventory screen.
+func _loot_check(p: GameCharacter) -> void:
+	var loot := Game.loot
+	var world_count := loot.pickups.size()
+	if world_count < 60:
+		_checks_failed.append("too little world loot: %d" % world_count)
+	# Clear the slots and bag for a clean test.
+	for k in GameCharacter.SLOT_COUNT:
+		p.take_weapon(k)
+	p.inventory.clear()
+	var at := loot.floor_at(p.global_position + Vector3(-sin(p.aim_yaw), 0.0, -cos(p.aim_yaw)) * 1.0)
+	var gun := loot.spawn(&"v9", 1, at, 0.0, 12)
+	await _wait(0.25)
+	var target := loot.best_target(p, Vector3(-sin(p.aim_yaw), -0.5, -cos(p.aim_yaw)).normalized())
+	if target != gun:
+		_checks_failed.append("pickup target not found (got %s)" % (target.id if target != null else &"null"))
+	loot.take(p, gun)
+	if p.slots[GameCharacter.SLOT_PRIMARY_1] == null or p.weapon.ammo != 12 or p.weapon_data.id != &"v9":
+		_checks_failed.append("weapon pickup did not equip v9 with 12 rounds")
+	var bag := loot.spawn(&"backpack_1", 1, at)
+	loot.take(p, bag)
+	var cap := p.inventory.capacity()
+	var heavy := loot.spawn(&"ammo_shotgun", 400, at)
+	var code := loot.take(p, heavy)
+	var used := p.inventory.used_weight()
+	if code != LootManager.Take.PARTIAL or used > cap + 0.01 or heavy.count <= 0:
+		_checks_failed.append("capacity: code=%d used=%.1f cap=%.1f left=%d" % [code, used, cap, heavy.count])
+	loot.remove(heavy)
+	var before := loot.pickups.size()
+	loot.drop_item(p, &"ammo_shotgun", 10)
+	loot.drop_weapon(p, GameCharacter.SLOT_PRIMARY_1)
+	if loot.pickups.size() != before + 2 or p.slots[GameCharacter.SLOT_PRIMARY_1] != null:
+		_checks_failed.append("drop failed")
+	var inv_screen := main.session.get_node("InventoryScreen") as InventoryScreen
+	inv_screen.open()
+	await _wait(0.4)
+	var rows := 0
+	for col in [inv_screen._ground_box, inv_screen._bag_box, inv_screen._equip_box]:
+		rows += (col as Node).get_child_count()
+	inv_screen.close()
+	print("[auto] loot check: world=%d cap=%.0f used=%.0f screen_rows=%d" % [world_count, cap, used, rows])
+	if rows < 5:
+		_checks_failed.append("inventory screen empty")
+	# Back to a normal loadout for the rest of the test.
+	p.inventory.clear()
+	p.give_weapon(WeaponDB.K7)
+	p.inventory.add_ammo(WeaponDB.K7.ammo_type, 60)
 
 
 ## Drops the player into deep water for a few seconds to exercise swimming.
@@ -326,6 +380,8 @@ func _autopilot(delta: float) -> void:
 			p.cycle_fire_mode()
 		elif r < 0.4:
 			p.cycle_weapon(1)
+		elif r < 0.5 and Game.loot.player_target != null:
+			Game.loot.take(p, Game.loot.player_target)
 	# Shoot at the nearest visible enemy.
 	var best: GameCharacter = null
 	var best_d := 160.0
@@ -521,6 +577,35 @@ func _run_screenshots() -> void:
 		cam.look_at(Vector3(c.x - 10, h + 1.5, c.y - 8))
 		await _wait(0.5)
 		await _shot("06_street_level")
+
+	# Loot on a house floor, then the pickup prompt and the inventory screen.
+	var near_town: Vector2 = towns[0].center if not towns.is_empty() else Vector2.ZERO
+	var best_p: LootManager.Pickup = null
+	for it in Game.loot.pickups:
+		if ItemDB.kind_of(it.id) == ItemDB.Kind.WEAPON and (best_p == null or Vector2(it.pos.x, it.pos.z).distance_to(near_town) < Vector2(best_p.pos.x, best_p.pos.z).distance_to(near_town)):
+			best_p = it
+	if best_p != null:
+		cam.global_position = best_p.pos + Vector3(1.6, 1.5, 1.2)
+		cam.look_at(best_p.pos)
+		await _wait(0.5)
+		await _shot("05b_loot_inside")
+		cam.current = false
+		Game.camera = p.get_node("CameraRig/SpringArm3D/Camera3D")
+		(Game.camera as Camera3D).current = true
+		var dir2 := Vector2(best_p.pos.x - p.global_position.x, best_p.pos.z - p.global_position.z)
+		p.global_position = best_p.pos + Vector3(-dir2.normalized().x, 0.05, -dir2.normalized().y) * 1.3
+		var to_item := best_p.pos - p.get_eye_position()
+		p.aim_yaw = atan2(-to_item.x, -to_item.z)
+		p.aim_pitch = -0.6
+		await _wait(0.8)
+		await _shot("05c_pickup_prompt")
+		var inv_screen := main.session.get_node("InventoryScreen") as InventoryScreen
+		inv_screen.open()
+		await _wait(0.5)
+		await _shot("05d_inventory")
+		inv_screen.close()
+		cam.current = true
+		Game.camera = cam
 
 	# Close-up of a bot (and the player) posing.
 	var bot: GameCharacter = null

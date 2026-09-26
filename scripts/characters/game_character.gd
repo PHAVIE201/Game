@@ -254,6 +254,19 @@ func cycle_weapon(dir: int) -> void:
 		equip_slot(order[posmod(idx + dir, order.size())])
 
 
+## Empties weapons and inventory (after the death drop).
+func clear_loadout() -> void:
+	for k in SLOT_COUNT:
+		slots[k] = null
+	_equip(-1)
+	inventory.clear()
+
+
+## Can pick up / use items right now.
+func can_interact() -> bool:
+	return not is_dead and not is_swimming
+
+
 func has_any_gun() -> bool:
 	for w in slots:
 		if w != null:

@@ -21,5 +21,5 @@ echo "== 3/4 Editor diagnostics (errors + warnings)"
 python3 tools/lsp_diagnostics.py "$GODOT" .
 
 echo "== 4/4 Gameplay smoke test (about 1 minute)"
-"$GODOT" --headless --path . -- --autotest=40 --bots=8 2>&1 | grep -E "^\[auto\] (weapon|swim|paused|back|shots|avg|result|CHECK|AUTOTEST)|SCRIPT ERROR|WATCHDOG"
+"$GODOT" --headless --path . -- --autotest=40 --bots=8 2>&1 | grep -E "^\[auto\] (weapon|loot|death|swim|paused|back|shots|avg|result|CHECK|AUTOTEST)|SCRIPT ERROR|WATCHDOG"
 echo "All checks passed."
