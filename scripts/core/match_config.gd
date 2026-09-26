@@ -20,3 +20,5 @@ var zone_time_scale := 1.0
 ## Everyone starts in the plane and parachutes down (false = spawn on the
 ## ground around the player, used by some automated tests).
 var use_plane := true
+## Start with weapons (tests / debugging). Normal matches start empty-handed.
+var starting_kits := false

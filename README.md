@@ -246,6 +246,28 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
   súng chính ngẫu nhiên và đạn không giới hạn (bot biết nhặt đồ ở giai đoạn 3); khi chết bot rơi súng và
   vài hộp đạn.
 
+## 3c. Giai đoạn 3 – Bot thông minh hơn (đang làm)
+
+**3.1 Bot tự nhặt đồ** ✔
+- Bot (và người chơi) giờ **xuất phát tay không**, nhảy dù xuống và phải tự nhặt đồ. (Tùy chọn
+  `MatchConfig.starting_kits` vẫn còn cho các bài kiểm tra.)
+- **Vào nhà qua cửa**: khi dựng nhà, vị trí từng cửa (và cửa thông phòng trong nhà dài) được ghi lại;
+  `Settlements.plan_path()` tạo các điểm đi qua cửa để ra / vào nhà, `BotNavigator` đi theo các điểm này
+  (tắt né vật cản khi đang qua khung cửa). Bot ở gần nhà luôn dùng vật lý đầy đủ (không dùng LOD đơn giản).
+- `BotLoot` chấm điểm món đồ theo nhu cầu: chưa có súng thì súng nào cũng quý; đạn chỉ nhặt khi hợp súng đang
+  mang; giáp / mũ khi tốt hơn; balo khi cấp cao hơn; đồ hồi máu / lựu đạn tới một số lượng nhất định; ống ngắm
+  khi có súng gắn được. Điểm chia theo khoảng cách.
+- Trạng thái mới:
+  - **Loot**: đi tới món đáng giá nhất trong 32 m, nhặt, lặp lại tới khi hết đồ đáng nhặt hoặc hết thời gian.
+  - **Search**: còn thiếu đồ (chưa có súng dùng được, ít đạn, thiếu giáp / mũ, ít đồ hồi máu) thì tới ngôi nhà
+    gần nhất chưa lục trong bo rồi lục nhà đó.
+- Sau khi đáp dù, sau khi hạ địch (nhặt đồ rơi ra), khi rảnh, và dọc đường đi (đồ tốt trong 16–18 m) bot đều
+  nhặt đồ. Bot giữ súng tốt nhất trên tay và tự nạp đạn khi rảnh.
+- **Bot tay không**: không lao vào đấu súng; bị áp sát (< 7 m) hoặc bị đánh thì đấm lại, còn không thì tiếp tục
+  đi tìm súng; bỏ qua tiếng súng xa.
+- Bo: bot tính lúc nào cần đi vào vòng mới dựa vào thời gian **vòng đóng hẳn** và quãng đường, cộng thêm một
+  khoảng an toàn tăng dần theo pha; khi còn dư thời gian thì vừa đi vừa nhặt đồ.
+
 ## 4. Kiến trúc
 
 ```
@@ -284,7 +306,8 @@ scripts/
   weapons/         weapon_data (Resource), weapon_db, weapon, projectile_system, throwable_system,
                    weapon_models, damage_info
   ai/              bot_brain, bot_perception, bot_navigator, bot_profile, state_machine, bot_state
-  ai/states/       idle, wander, investigate, combat, zone, parachute
+  ai/states/       idle, wander, investigate, combat, zone, parachute, loot, search
+  ai/bot_loot      chấm điểm đồ cho bot
   fx/  ui/  debug/ (automation cho test headless)
 resources/         weapons/*.tres (6 súng + tay không), ui/theme.tres
 shaders/           foliage, water, tracer, zone_wall

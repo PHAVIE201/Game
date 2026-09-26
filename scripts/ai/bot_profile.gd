@@ -39,7 +39,7 @@ static func create(difficulty: int, rng: RandomNumberGenerator) -> BotProfile:
 	p.turn_speed *= rng.randf_range(0.85, 1.15)
 	p.view_distance *= rng.randf_range(0.85, 1.1)
 	p.crouch_chance = rng.randf_range(0.15, 0.5)
-	p.zone_margin = rng.randf_range(10.0, 90.0)
+	p.zone_margin = rng.randf_range(10.0, 60.0)
 	p.burst_min = rng.randi_range(2, 4)
 	p.burst_max = p.burst_min + rng.randi_range(2, 4)
 	return p

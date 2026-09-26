@@ -122,8 +122,10 @@ func _spawn(scene: PackedScene, pos: Vector3, yaw: float, display_name: String) 
 	return c
 
 
-## Weapons a character starts with (until looting replaces it).
+## Weapons a character starts with (only when config.starting_kits: tests).
 func _give_starting_kit(c: GameCharacter) -> void:
+	if not config.starting_kits:
+		return
 	var primaries: Array[WeaponData] = [WeaponDB.K7, WeaponDB.V9, WeaponDB.B12, WeaponDB.D3, WeaponDB.R8]
 	var weights: Array[float] = [0.32, 0.24, 0.16, 0.15, 0.13]
 	if c.is_player:

@@ -26,4 +26,10 @@ func update(delta: float) -> void:
 		var ang := c.aim_yaw + brain.rng.randf_range(-1.6, 1.6)
 		brain.look_at_point(c.get_eye_position() + Vector3(-sin(ang), 0.0, -cos(ang)) * 20.0)
 	if _timer <= 0.0:
-		brain.fsm.change(&"wander")
+		brain.maintain_weapon()
+		if brain.sees_loot(30.0, 0.15):
+			brain.fsm.change(&"loot", {"budget": 40.0})
+		elif brain.needs_gear():
+			brain.fsm.change(&"search")
+		else:
+			brain.fsm.change(&"wander")

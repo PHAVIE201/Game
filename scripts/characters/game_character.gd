@@ -117,6 +117,8 @@ var last_fire_msec := -100000
 ## Simulation LOD: bots far from the camera skip move_and_slide() and simply
 ## follow the terrain (see _move_simple). Switched automatically.
 var sim_simple := false
+## Set by the bot navigator while walking through doorways: full physics.
+var nav_precise := false
 const SIMPLE_ENTER_DIST := 230.0
 const SIMPLE_EXIT_DIST := 200.0
 
@@ -814,7 +816,8 @@ func _update_sim_lod() -> void:
 		return
 	var d2 := Game.get_view_position().distance_squared_to(global_position)
 	var limit := SIMPLE_EXIT_DIST if sim_simple else SIMPLE_ENTER_DIST
-	sim_simple = d2 > limit * limit and is_on_floor_or_simple()
+	sim_simple = d2 > limit * limit and is_on_floor_or_simple() and not nav_precise \
+		and not Game.world.settlements.is_inside_building(global_position, 1.5)
 
 
 ## Cheap movement for far bots: slide along the terrain surface, blocked only

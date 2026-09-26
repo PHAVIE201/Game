@@ -23,6 +23,7 @@ var bots := 8
 var map_seed := 1337
 var zone_scale := 1.0
 var _sim_started := false
+var _sim_dump_timer := 60.0
 var _sim := {"zone_deaths": 0, "gun_deaths": 0, "other_deaths": 0, "landed": false}
 
 var _t := 0.0
@@ -95,6 +96,10 @@ func _ready() -> void:
 	cfg.bot_count = bots
 	cfg.map_seed = map_seed
 	cfg.zone_time_scale = zone_scale
+	if mode == "duel":
+		# Accuracy test: bots on the ground around the player, armed.
+		cfg.use_plane = false
+		cfg.starting_kits = true
 	print("[auto] mode=%s bots=%d seed=%d" % [mode, bots, map_seed])
 	watchdog.start(duration + 240.0)
 	main.call_deferred("start_game", cfg)
@@ -154,6 +159,9 @@ func _run_autotest(delta: float) -> void:
 				print("[auto] --- restart match ---")
 				s.restart_match()
 				_skip_plane()
+				# Something to drop when the player is killed later.
+				Game.player.give_weapon(WeaponDB.P1)
+				Game.player.inventory.add_ammo(WeaponDB.P1.ammo_type, 30)
 				_stats.restarts += 1
 				_phase = 1
 		1:
@@ -810,9 +818,23 @@ func _run_matchsim(delta: float) -> void:
 				outside += 1
 			if c.is_armed():
 				armed += 1
-		print("[sim] t=%3.0fs alive=%d phase=%d state=%d r=%.0f outside=%d armed=%d deaths(zone=%d gun=%d) states=%s" % [
+		print("[sim] t=%3.0fs alive=%d phase=%d state=%d r=%.0f outside=%d armed=%d deaths(zone=%d gun=%d) states=%s loot=%s" % [
 			_t, mm.alive.size() - 1, zone.phase, zone.state, zone.radius, outside, armed,
-			_sim.zone_deaths, _sim.gun_deaths, str(states)])
+			_sim.zone_deaths, _sim.gun_deaths, str(states), str(LootState.stats)])
+	_sim_dump_timer -= delta
+	if _sim_dump_timer <= 0.0:
+		_sim_dump_timer = 60.0
+		for c in mm.alive:
+			if c == p:
+				continue
+			var b := c.get_node_or_null("BotBrain") as BotBrain
+			var guns := []
+			for w in c.slots:
+				if w != null:
+					guns.append("%s:%d+%d" % [w.data.id, w.ammo, c.inventory.get_ammo(w.data.ammo_type)])
+			print("[sim]   %s %s hp=%.0f guns=%s armor=%s/%s items=%d state=%s" % [c.display_name,
+				"A" if c.is_armed() else "-", c.health, str(guns), c.inventory.helmet, c.inventory.vest,
+				c.inventory.items.size(), b.fsm.current_name if b != null else &"?"])
 	if _t > duration or mm.alive.size() <= 2:
 		print("[sim] END t=%.0fs alive_bots=%d zone_deaths=%d gun_deaths=%d other=%d avg_physics=%.2fms" % [
 			_t, mm.alive.size() - 1, _sim.zone_deaths, _sim.gun_deaths, _sim.other_deaths,
@@ -871,6 +893,9 @@ func _run_duels() -> void:
 			print("[duel] %.0fm: no clear line of sight, skipped" % dist)
 			continue
 		duelist.health = 100.0
+		if duelist.weapon_data != WeaponDB.K7:
+			duelist.give_weapon(WeaponDB.K7)
+			duelist.inventory.add_ammo(WeaponDB.K7.ammo_type, 999)
 		duelist.weapon.ammo = duelist.weapon.data.magazine_size
 		brain.clear_target()
 		brain.fsm.change(&"idle")

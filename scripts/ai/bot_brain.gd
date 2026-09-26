@@ -39,6 +39,8 @@ var _aim_offset := Vector3.ZERO
 var _aim_offset_timer := 0.0
 var _weapon_switch_cooldown := 0.0
 var _zone_check_timer := 0.0
+## Buildings already searched for loot (key: center Vector2).
+var searched := {}
 
 ## Level of detail: bots far from the camera think less often (every 2nd / 4th
 ## physics tick, with the accumulated delta). Their last inputs stay applied in
@@ -72,6 +74,8 @@ func _build_states() -> void:
 	fsm.add(&"combat", CombatState.new())
 	fsm.add(&"zone", ZoneState.new())
 	fsm.add(&"parachute", ParachuteState.new())
+	fsm.add(&"loot", LootState.new())
+	fsm.add(&"search", SearchState.new())
 
 
 func _physics_process(delta: float) -> void:
@@ -89,9 +93,9 @@ func _physics_process(delta: float) -> void:
 		fsm.update(delta)
 		return
 	if fsm.is_in(&"parachute"):
-		# Just landed.
+		# Just landed: the building next to us has loot.
 		(fsm.current as ParachuteState).on_landed()
-		fsm.change(&"idle")
+		fsm.change(&"loot", {"budget": rng.randf_range(60.0, 110.0)})
 	_lod_delta += delta
 	_lod_counter += 1
 	if _lod_counter < lod_every:
@@ -119,6 +123,22 @@ func _physics_process(delta: float) -> void:
 	_apply_move(dir)
 
 
+## > 0 when it is time to walk into the next circle: the walk (with a margin
+## that grows in the later, deadlier phases) takes longer than the time left
+## before the circle has finished closing on us.
+func zone_urgency() -> float:
+	var zone := Game.zone
+	if zone == null or not zone.is_active():
+		return -1.0
+	var pos := character.global_position
+	var dist := Vector2(pos.x, pos.z).distance_to(zone.next_center) - zone.next_radius
+	if dist <= 0.0:
+		return -1.0
+	var travel := dist / GameCharacter.RUN_SPEED
+	var phase_k := clampf(zone.phase / 3.0, 0.3, 1.0)
+	return travel * 1.25 + profile.zone_margin * phase_k - zone.time_until_closed()
+
+
 ## Heads into the safe zone when outside it, or when the next circle closes
 ## soon compared with the time needed to walk there.
 func _check_zone(delta: float) -> void:
@@ -132,11 +152,7 @@ func _check_zone(delta: float) -> void:
 	var pos := character.global_position
 	var go := not zone.is_inside(pos, 3.0)
 	if not go and not zone.is_inside_next(pos, 8.0):
-		# Be inside the next circle before it starts shrinking.
-		var dist := Vector2(pos.x, pos.z).distance_to(zone.next_center) - zone.next_radius
-		var travel := dist / GameCharacter.RUN_SPEED
-		var deadline := zone.timer if zone.state == ZoneManager.State.WAITING else 0.0
-		go = deadline < travel * 1.3 + profile.zone_margin
+		go = zone_urgency() > 0.0
 	if go:
 		fsm.change(&"zone")
 
@@ -224,6 +240,73 @@ func select_weapon_for(dist: float, delta: float) -> void:
 func ensure_armed() -> void:
 	if character.active_slot < 0 and character.has_any_gun():
 		select_weapon_for(60.0, 1.0)
+
+
+## A gun with rounds in it or in the backpack.
+func has_usable_gun() -> bool:
+	for w in character.slots:
+		if w != null and (w.ammo > 0 or character.inventory.get_ammo(w.data.ammo_type) > 0):
+			return true
+	return false
+
+
+## Out of combat: hold the best gun and keep it loaded.
+func maintain_weapon() -> void:
+	if character.is_switching_weapon() or character.is_using_item() or character.throwing_item != &"":
+		return
+	if character.active_slot < 0 or weapon_score(character.weapon, 60.0) < 0.0:
+		if has_usable_gun():
+			select_weapon_for(60.0, 1.0)
+		return
+	var w := character.weapon
+	if w.uses_ammo() and not w.is_reloading() and w.ammo < w.data.magazine_size * 0.6 \
+			and character.inventory.get_ammo(w.data.ammo_type) > 0:
+		character.request_reload()
+
+
+## Still missing important gear (a usable gun, ammo, armor, heals)?
+func needs_gear() -> bool:
+	if not has_usable_gun():
+		return true
+	var inv := character.inventory
+	var ammo := 0
+	for w in character.slots:
+		if w != null:
+			ammo += w.ammo + inv.get_ammo(w.data.ammo_type)
+	if ammo < 60:
+		return true
+	if inv.vest == &"" or inv.helmet == &"":
+		return true
+	return inv.get_count(&"bandage") + inv.get_count(&"first_aid") * 3 + inv.get_count(&"medkit") * 5 < 5
+
+
+func mark_searched(b: Dictionary) -> void:
+	searched[b.center] = true
+
+
+## Nearest building (inside the zone) not searched yet, or {}.
+func pick_building_to_search() -> Dictionary:
+	var pos := character.global_position
+	var zone := Game.zone
+	var best: Dictionary = {}
+	var best_d := 420.0
+	for b in Game.world.settlements.buildings:
+		if searched.has(b.center):
+			continue
+		var c := Vector3(b.center.x, b.floor_y, b.center.y)
+		if zone != null and zone.is_active() and not zone.is_inside(c, 15.0):
+			continue
+		var d := pos.distance_to(c) * rng.randf_range(0.85, 1.15)
+		if d < best_d:
+			best_d = d
+			best = b
+	return best
+
+
+## Something valuable within `radius` (opportunistic looting).
+func sees_loot(radius: float, min_value: float) -> bool:
+	var p := BotLoot.best_pickup(character, radius, {})
+	return p != null and BotLoot.value(character, p) >= min_value
 
 
 func can_target(c: GameCharacter) -> bool:
@@ -334,6 +417,11 @@ func pick_wander_destination() -> Vector3:
 # --------------------------------------------------------------------------
 
 func on_enemy_seen(c: GameCharacter) -> void:
+	# Bare hands: only fight when the enemy is right here (or hurt us).
+	if not has_usable_gun() and not fsm.is_in(&"combat"):
+		var d := character.global_position.distance_to(c.global_position)
+		if d > 7.0 and time - last_damaged_time > 3.0:
+			return
 	var switch := target == null or target.is_dead or target == c or not is_target_visible()
 	if not switch and target != null:
 		# Switch if the new enemy is much closer.
@@ -353,6 +441,9 @@ func on_enemy_seen(c: GameCharacter) -> void:
 
 func on_heard_shot(pos: Vector3, shooter: GameCharacter, radius: float) -> void:
 	if shooter == character or character.is_dead or fsm.is_in(&"combat") or character.is_in_air():
+		return
+	if not has_usable_gun():
+		# Unarmed: stay away from the shooting.
 		return
 	if not can_target(shooter):
 		return

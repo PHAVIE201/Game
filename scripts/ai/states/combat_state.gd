@@ -32,7 +32,8 @@ func update(delta: float) -> void:
 	var t := brain.target
 	if t == null or t.is_dead:
 		brain.clear_target()
-		brain.fsm.change(&"idle")
+		# Loot what the enemy dropped.
+		brain.fsm.change(&"loot", {"budget": 30.0})
 		return
 	var visible := brain.is_target_visible()
 	var lost_for := brain.time - brain.target_last_seen_time
@@ -43,9 +44,12 @@ func update(delta: float) -> void:
 		brain.fsm.change(&"investigate", {"pos": last})
 		return
 
+	var dist := c.global_position.distance_to(t.global_position)
+	if not brain.has_usable_gun():
+		_fight_unarmed(t, dist, visible)
+		return
 	var aim_pt := brain.get_aim_point(delta)
 	brain.look_at_point(aim_pt)
-	var dist := c.global_position.distance_to(t.global_position)
 	brain.select_weapon_for(dist, delta)
 	var data := c.weapon_data
 	c.input_aim = visible and dist > 12.0 and (_tactic != Tactic.APPROACH or data.category == WeaponData.Category.SNIPER)
@@ -106,6 +110,27 @@ func update(delta: float) -> void:
 			brain.move_mode = BotBrain.MoveMode.RUN
 			brain.direct_move = (-fwd + side * 0.6).normalized()
 
+
+
+## No gun: punch when the enemy is close, otherwise go find a weapon.
+func _fight_unarmed(t: GameCharacter, dist: float, visible: bool) -> void:
+	var c := get_character()
+	if c.active_slot >= 0:
+		c.holster()
+	if dist > 9.0 or not visible:
+		c.input_fire = false
+		brain.clear_target()
+		brain.fsm.change(&"loot", {"budget": 40.0})
+		return
+	c.request_stance(GameCharacter.Stance.STAND)
+	brain.look_at_point(t.get_hitbox_center())
+	c.input_aim = false
+	if dist > 1.4:
+		if not brain.nav.active or brain.nav.destination.distance_to(t.global_position) > 1.5:
+			brain.move_to(t.global_position, BotBrain.MoveMode.SPRINT, 1.0)
+	else:
+		brain.stop_moving()
+	c.input_fire = dist < 1.9 and brain.aim_error_to(t.get_hitbox_center()) < 0.35
 
 
 func _pause_after_burst(data: WeaponData, dist: float) -> float:

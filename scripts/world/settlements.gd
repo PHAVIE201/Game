@@ -40,6 +40,8 @@ var loot_points := PackedVector3Array()
 ## Spatial hash: Vector2i cell -> Array of building dicts (fast point queries).
 const GRID_CELL := 64.0
 var _grid: Dictionary = {}
+## Building whose walls are being built (door bookkeeping).
+var _door_building: Dictionary = {}
 
 
 static func footprint(type: int) -> Vector2:
@@ -281,6 +283,8 @@ func _build_one(mb: MeshBuilder, body: StaticBody3D, xf: Transform3D, b: Diction
 	var wall_c: Color = b.wall_color
 	var roof_c: Color = b.roof_color
 	var type: int = b.type
+	b["doors"] = []
+	_door_building = b
 	var wall_h := 3.0
 	if type == BType.WAREHOUSE:
 		wall_h = 5.5
@@ -301,6 +305,7 @@ func _build_one(mb: MeshBuilder, body: StaticBody3D, xf: Transform3D, b: Diction
 	match type:
 		BType.SHED:
 			# Three walls, open front: good cover spot.
+			_add_door(Vector3(0.0, 0.0, z0), Vector3.FORWARD, false)
 			_wall_x(mb, body, xf, z1, x0, x1, [], wall_h, wall_c)
 			_wall_z(mb, body, xf, x0, z0, z1, [], wall_h, wall_c)
 			_wall_z(mb, body, xf, x1, z0, z1, [], wall_h, wall_c)
@@ -335,6 +340,8 @@ func _build_one(mb: MeshBuilder, body: StaticBody3D, xf: Transform3D, b: Diction
 			_block(mb, body, xf, Vector3(-2.2, FLOOR_Y + 0.38, 1.6), Vector3(1.3, 0.76, 0.8), WOOD_COLOR)
 			_block(mb, body, xf, Vector3(2.6, FLOOR_Y + 0.25, 1.9), Vector3(1.0, 0.5, 2.0), Color(0.75, 0.45, 0.4))
 			_add_loot(b, [Vector3(-2.2, FLOOR_Y + 0.8, 1.6), Vector3(0.0, FLOOR_Y, 0.0), Vector3(2.6, FLOOR_Y + 0.5, 1.9)])
+
+	_door_building = {}
 
 	# Floor inside (slightly different color from the foundation sides).
 	mb.add_box(Vector3(0, FLOOR_Y - 0.01, 0), Vector3(w - WALL_T * 2.0, 0.04, d - WALL_T * 2.0), Color(0.6, 0.5, 0.38))
@@ -415,8 +422,93 @@ func _add_shape(body: StaticBody3D, shape: Shape3D, local_xf: Transform3D) -> vo
 	body.add_child(cs)
 
 
+## Records a doorway of the building being built (for bot navigation).
+## `local` = door center on the floor, `out_local` = direction out of the room.
+func _add_door(local: Vector3, out_local: Vector3, interior: bool) -> void:
+	var b := _door_building
+	if b.is_empty():
+		return
+	var wx := Transform3D(Basis(Vector3.UP, b.angle), Vector3(b.center.x, b.floor_y, b.center.y))
+	var room := 0
+	if int(b.type) == BType.LONGHOUSE:
+		room = -1 if interior else (0 if local.x < 0.5 else 1)
+	(b.doors as Array).append({"pos": wx * local, "out": (wx.basis * out_local).normalized(), "room": room})
+
+
+## Room index of a world point inside a building (long houses have two).
+func room_of(b: Dictionary, p: Vector3) -> int:
+	if int(b.type) != BType.LONGHOUSE:
+		return 0
+	var local := (Vector2(p.x, p.z) - (b.center as Vector2)).rotated(b.angle)
+	return 0 if local.x < 0.5 else 1
+
+
+## The building whose footprint (+ margin) contains p, or {}.
+func building_at(p: Vector3, margin := 0.0) -> Dictionary:
+	var key := Vector2i(floori(p.x / GRID_CELL), floori(p.z / GRID_CELL))
+	for b in _grid.get(key, []):
+		var local := (Vector2(p.x, p.z) - (b.center as Vector2)).rotated(b.angle)
+		var half: Vector2 = (b.size as Vector2) * 0.5 + Vector2(margin, margin)
+		if absf(local.x) < half.x and absf(local.y) < half.y:
+			return b
+	return {}
+
+
+## Waypoints through doorways to walk from `from` to `to` (both may be inside
+## buildings). Empty when a straight line is fine.
+func plan_path(from: Vector3, to: Vector3) -> PackedVector3Array:
+	var pts := PackedVector3Array()
+	var bf := building_at(from, 0.1)
+	var bt := building_at(to, -0.2)
+	if not bf.is_empty() and bf == bt:
+		var rf := room_of(bf, from)
+		var rt := room_of(bt, to)
+		if rf != rt:
+			for d in bf.get("doors", []):
+				if int(d.room) == -1:
+					var dp: Vector3 = d.pos
+					var out: Vector3 = d.out
+					# Interior door: its "out" points toward room 1 (+X).
+					var s := 1.0 if rf == 1 else -1.0
+					pts.append(dp + out * 0.9 * s)
+					pts.append(dp)
+					pts.append(dp - out * 0.9 * s)
+		return pts
+	if not bf.is_empty():
+		var d := _best_door(bf, room_of(bf, from), to)
+		if not d.is_empty():
+			pts.append(d.pos - d.out * 0.9)
+			pts.append(d.pos)
+			pts.append(d.pos + d.out * 1.4)
+	if not bt.is_empty():
+		var start := from if pts.is_empty() else pts[pts.size() - 1]
+		var d := _best_door(bt, room_of(bt, to), start)
+		if not d.is_empty():
+			pts.append(d.pos + d.out * 1.4)
+			pts.append(d.pos)
+			pts.append(d.pos - d.out * 0.9)
+	return pts
+
+
+## Exterior doorway of a room closest to `near`.
+func _best_door(b: Dictionary, room: int, near: Vector3) -> Dictionary:
+	var best: Dictionary = {}
+	var best_d := INF
+	for d in b.get("doors", []):
+		if int(d.room) == -1 or (int(d.room) != room and int(b.type) == BType.LONGHOUSE):
+			continue
+		var dist := (d.pos as Vector3).distance_squared_to(near)
+		if dist < best_d:
+			best_d = dist
+			best = d
+	return best
+
+
 ## Wall running along X at local z, from x0 to x1, with openings (doors/windows).
 func _wall_x(mb: MeshBuilder, body: StaticBody3D, xf: Transform3D, z: float, x0: float, x1: float, openings: Array, h: float, color: Color) -> void:
+	for op in openings:
+		if float(op.b) <= 0.01:
+			_add_door(Vector3(op.x, 0.0, z), Vector3(0, 0, signf(z)), false)
 	for seg in _wall_segments(x0, x1, openings, h):
 		var c: Vector3 = seg.center
 		var s: Vector3 = seg.size
@@ -426,6 +518,10 @@ func _wall_x(mb: MeshBuilder, body: StaticBody3D, xf: Transform3D, z: float, x0:
 
 ## Wall running along Z at local x, from z0 to z1.
 func _wall_z(mb: MeshBuilder, body: StaticBody3D, xf: Transform3D, x: float, z0: float, z1: float, openings: Array, h: float, color: Color) -> void:
+	var interior := absf(x) < 1.0
+	for op in openings:
+		if float(op.b) <= 0.01:
+			_add_door(Vector3(x, 0.0, op.x), Vector3(1, 0, 0) if interior else Vector3(signf(x), 0, 0), interior)
 	for seg in _wall_segments(z0, z1, openings, h):
 		var c: Vector3 = seg.center
 		var s: Vector3 = seg.size

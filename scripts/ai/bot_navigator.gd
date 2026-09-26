@@ -3,10 +3,10 @@ extends RefCounted
 ## Steering-based navigation for bots on the open island.
 ##
 ## Goes straight toward the destination and avoids obstacles (trees, rocks,
-## walls) and deep water with short "whisker" raycasts. Stuck detection makes
-## the bot jump / sidestep, and finally reports failure so the state picks a
-## new goal. Phase 4 can swap this for NavigationAgent3D on baked navmeshes
-## around towns without touching the states.
+## walls) and deep water with short "whisker" raycasts. Entering / leaving a
+## building follows waypoints through its doorways (Settlements.plan_path).
+## Stuck detection makes the bot jump / sidestep, and finally reports failure
+## so the state picks a new goal.
 
 const PROBE_INTERVAL := 0.15
 const PROBE_LENGTH := 2.2
@@ -17,6 +17,9 @@ var active := false
 var arrived := false
 var failed := false
 var arrive_radius := 2.5
+## Doorway waypoints before the destination.
+var waypoints := PackedVector3Array()
+var _wp := 0
 
 var _probe_timer := 0.0
 var _avoid_timer := 0.0
@@ -41,10 +44,20 @@ func set_destination(p: Vector3, radius := 2.5) -> void:
 	_stuck_count = 0
 	_stuck_timer = 0.0
 	_last_pos = brain.character.global_position
+	_wp = 0
+	waypoints = PackedVector3Array()
+	if Game.world != null and Game.world.settlements != null:
+		waypoints = Game.world.settlements.plan_path(_last_pos, p)
+	brain.character.nav_precise = not waypoints.is_empty()
 
 
 func stop() -> void:
 	active = false
+	brain.character.nav_precise = false
+
+
+func is_following_doors() -> bool:
+	return active and _wp < waypoints.size()
 
 
 func distance_to_destination() -> float:
@@ -58,13 +71,27 @@ func update(delta: float) -> Vector3:
 	if not active:
 		return Vector3.ZERO
 	var pos := brain.character.global_position
-	var to := destination - pos
+	var goal := destination
+	var radius := arrive_radius
+	var on_wp := _wp < waypoints.size()
+	if on_wp:
+		goal = waypoints[_wp]
+		radius = 0.6
+	var to := goal - pos
 	to.y = 0.0
-	if to.length() < arrive_radius:
+	if to.length() < radius:
+		if on_wp:
+			_wp += 1
+			brain.character.nav_precise = _wp < waypoints.size()
+			return update(delta)
 		arrived = true
 		active = false
+		brain.character.nav_precise = false
 		return Vector3.ZERO
-	var dir := steer(to.normalized(), delta)
+	var dir := to.normalized()
+	# No whisker avoidance while threading a doorway (the frame would count).
+	if not on_wp or to.length() > 4.0:
+		dir = steer(dir, delta)
 
 	# Stuck detection.
 	_stuck_timer += delta
@@ -78,6 +105,7 @@ func update(delta: float) -> Vector3:
 			if _stuck_count >= 4:
 				failed = true
 				active = false
+				brain.character.nav_precise = false
 		else:
 			_stuck_count = maxi(_stuck_count - 1, 0)
 		_stuck_timer = 0.0

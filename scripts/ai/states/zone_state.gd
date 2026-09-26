@@ -4,6 +4,7 @@ extends BotState
 
 var _retries := 0
 var _timeout := 0.0
+var _loot_check := 3.0
 
 
 func enter(_params: Dictionary) -> void:
@@ -34,6 +35,16 @@ func _mode() -> int:
 func update(delta: float) -> void:
 	_timeout -= delta
 	brain.move_mode = _mode()
+	_loot_check -= delta
+	if _loot_check <= 0.0:
+		_loot_check = 3.0
+		brain.maintain_weapon()
+		# Not in a hurry yet: grab good things on the way.
+		var zone := Game.zone
+		if zone.is_inside(get_character().global_position, 20.0) and brain.zone_urgency() < -40.0 \
+				and brain.sees_loot(16.0, 0.35):
+			brain.fsm.change(&"loot", {"budget": 20.0})
+			return
 	if brain.nav.arrived:
 		brain.fsm.change(&"idle")
 	elif brain.nav.failed or _timeout <= 0.0:
