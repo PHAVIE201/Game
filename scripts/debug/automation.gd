@@ -23,7 +23,7 @@ var bots := 8
 var map_seed := 1337
 var zone_scale := 1.0
 var _sim_started := false
-var _sim := {"zone_deaths": 0, "gun_deaths": 0, "other_deaths": 0}
+var _sim := {"zone_deaths": 0, "gun_deaths": 0, "other_deaths": 0, "landed": false}
 
 var _t := 0.0
 var _phase := 0
@@ -145,7 +145,7 @@ func _run_autotest(delta: float) -> void:
 		0:
 			if _weapon_check_state == 0:
 				_weapon_check_state = 1
-				_weapon_check()
+				_start_checks()
 			if _weapon_check_state == 1:
 				return
 			_autopilot(delta)
@@ -153,6 +153,7 @@ func _run_autotest(delta: float) -> void:
 			if _t > duration * 0.4:
 				print("[auto] --- restart match ---")
 				s.restart_match()
+				_skip_plane()
 				_stats.restarts += 1
 				_phase = 1
 		1:
@@ -191,6 +192,7 @@ func _run_autotest(delta: float) -> void:
 					_checks_failed.append("nothing dropped on death")
 				print("[auto] --- restart + force victory ---")
 				s.restart_match()
+				_skip_plane()
 				_stats.restarts += 1
 				_phase = 3
 		3:
@@ -206,6 +208,86 @@ func _run_autotest(delta: float) -> void:
 		4:
 			if _t > duration:
 				_finish()
+
+
+func _start_checks() -> void:
+	await _plane_check()
+	# The weapon check needs open ground: a town square.
+	_skip_plane()
+	await _weapon_check()
+
+
+## Everybody starts in the plane: jump when the doors open, steer onto the
+## nearest town, land. Runs 4x faster than real time.
+func _plane_check() -> void:
+	var p := Game.player
+	var mm := Game.match_manager
+	var plane := mm.plane
+	var ctrl := p.get_node_or_null("PlayerController")
+	ctrl.set_process(false)
+	ctrl.set_process_unhandled_input(false)
+	if plane == null or p.air_state != GameCharacter.AirState.PLANE or p.is_targetable():
+		_checks_failed.append("player should start inside the plane")
+		return
+	# Bots may already fight on the ground: keep the player alive for the check.
+	p.max_health = 1.0e9
+	p.health = 1.0e9
+	Engine.time_scale = 4.0
+	var t0 := Time.get_ticks_msec()
+	while not plane.doors_open and Time.get_ticks_msec() - t0 < 30000:
+		await get_tree().physics_frame
+	var on_board := plane.passengers.size()
+	# Target: the town closest to the flight line.
+	var target := Vector3.ZERO
+	var best := INF
+	for t in Game.world.get_towns():
+		var c := Vector3(t.center.x, t.height, t.center.y)
+		var d := plane.lateral_distance(c)
+		if d < best:
+			best = d
+			target = c + Vector3(12.0, 0.0, 0.0)
+	# Jump roughly abeam of it.
+	while plane.doors_open and plane.progress < plane.project(target) - 120.0:
+		await get_tree().physics_frame
+	p.request_jump()
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var jumped := p.air_state == GameCharacter.AirState.FREEFALL
+	var saw_chute := false
+	t0 = Time.get_ticks_msec()
+	while p.air_state != GameCharacter.AirState.NONE and Time.get_ticks_msec() - t0 < 60000:
+		ParachuteState.steer_to(p, target, get_physics_process_delta_time())
+		saw_chute = saw_chute or p.air_state == GameCharacter.AirState.PARACHUTE
+		await get_tree().physics_frame
+	# Let the bots land too.
+	t0 = Time.get_ticks_msec()
+	var in_air := 99
+	while Time.get_ticks_msec() - t0 < 40000:
+		in_air = 0
+		for c in mm.alive:
+			if c.is_in_air():
+				in_air += 1
+		if in_air == 0:
+			break
+		await get_tree().physics_frame
+	Engine.time_scale = 1.0
+	p.max_health = 100.0
+	p.health = 100.0
+	var miss := Vector2(p.global_position.x - target.x, p.global_position.z - target.z).length()
+	print("[auto] plane check: on_board=%d jumped=%s chute=%s landed=%s miss=%.0fm bots_in_air=%d alive=%d" % [
+		on_board, jumped, saw_chute, p.air_state == GameCharacter.AirState.NONE, miss, in_air, mm.alive.size()])
+	if on_board != mm.participants.size() or not jumped or not saw_chute or p.air_state != GameCharacter.AirState.NONE or in_air > 0 or p.is_dead:
+		_checks_failed.append("plane / parachute flow")
+	if miss > 120.0:
+		_checks_failed.append("landed %.0f m away from the target" % miss)
+
+
+## Puts the player straight on the ground after a restart (no plane ride).
+func _skip_plane() -> void:
+	var p := Game.player
+	var towns := Game.world.get_towns()
+	var c: Vector2 = towns[0].center
+	p.place_on_ground(Game.world.find_spawn_point(_rng, Vector3(c.x, 0.0, c.y), 0.0, 8.0))
 
 
 ## Every gun (and the fists) must hit a dummy target placed in front of the player.
@@ -317,7 +399,7 @@ func _hit(p: GameCharacter, part: int, amount: float) -> void:
 ## the zone must hurt whoever stands outside.
 func _zone_check(p: GameCharacter) -> void:
 	var zone := Game.zone
-	var ok := zone.state == ZoneManager.State.WAITING and is_equal_approx(zone.radius, ZoneManager.START_RADIUS)
+	var ok := zone.is_active()
 	if Game.world.map_texture == null:
 		_checks_failed.append("no map texture")
 	var circles := []
@@ -598,6 +680,28 @@ func _run_matchsim(delta: float) -> void:
 				_sim.gun_deaths += 1
 			else:
 				_sim.other_deaths += 1)
+	if not _sim.landed:
+		var flying := 0
+		var misses: Array[float] = []
+		for c in mm.alive:
+			if c == p:
+				continue
+			if c.is_in_air():
+				flying += 1
+			var b := c.get_node_or_null("BotBrain") as BotBrain
+			if b != null:
+				var ps := b.fsm.states[&"parachute"] as ParachuteState
+				if ps.landing_miss >= 0.0:
+					misses.append(ps.landing_miss)
+		if flying == 0:
+			_sim.landed = true
+			misses.sort()
+			var total := 0.0
+			for m in misses:
+				total += m
+			print("[sim] all landed at t=%.0fs: n=%d avg_miss=%.0fm median=%.0fm max=%.0fm" % [_t, misses.size(),
+				total / maxf(misses.size(), 1), misses[misses.size() >> 1] if not misses.is_empty() else -1.0,
+				misses.back() if not misses.is_empty() else -1.0])
 	_log_timer -= delta
 	if _log_timer <= 0.0:
 		_log_timer = 10.0
@@ -710,6 +814,24 @@ func _run_screenshots() -> void:
 	var ctrl := p.get_node("PlayerController")
 	ctrl.set_process(false)
 	ctrl.set_process_unhandled_input(false)
+	# Plane, freefall, parachute.
+	var plane := Game.match_manager.plane
+	if plane != null:
+		p.aim_pitch = -0.25
+		p.aim_yaw = atan2(-plane.dir.x, -plane.dir.z) + 2.4
+		await _wait(1.5)
+		await _shot("00a_plane")
+		while not plane.doors_open:
+			await get_tree().physics_frame
+		p.request_jump()
+		p.aim_pitch = -0.6
+		await _wait(2.0)
+		await _shot("00b_freefall")
+		p.request_jump()
+		p.aim_pitch = -0.15
+		await _wait(2.0)
+		await _shot("00c_parachute")
+		_skip_plane()
 	await _wait(1.5)
 	p.aim_pitch = -0.08
 	await _wait(0.6)

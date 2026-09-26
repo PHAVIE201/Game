@@ -52,6 +52,8 @@ var reload_progress := -1.0   ## 0..1 while reloading, -1 otherwise
 var bolt_progress := -1.0     ## 0..1 while a bolt-action gun cycles, -1 otherwise
 var swap_amount := 0.0        ## 1 = weapon lowered (switching), 0 = ready
 var using_item := false       ## bandaging / drinking: gun lowered, hands together
+## GameCharacter.AirState: 2 = freefall (spread-eagle), 3 = parachute.
+var air_pose := 0
 
 ## Model-space transforms of every bone after the last animate().
 var bone_global: Array[Transform3D] = []
@@ -67,6 +69,7 @@ var flash_light: OmniLight3D
 var back_guns: Array[MeshInstance3D] = []
 var helmet_mesh: MeshInstance3D
 var vest_mesh: MeshInstance3D
+var canopy: MeshInstance3D
 
 static var _armor_cache: Dictionary = {}
 
@@ -76,6 +79,8 @@ var _armed := true
 var _punch := 0.0
 var _punch_side := 1.0
 var _use := 0.0
+var _fall := 0.0
+var _chute := 0.0
 var _crouch := 0.0
 var _prone := 0.0
 var _ads := 0.0
@@ -158,9 +163,35 @@ func build(outfit: Dictionary, weapon_model: StringName, use_flash_light: bool) 
 	vest_mesh.visible = false
 	add_child(vest_mesh)
 
+	canopy = MeshInstance3D.new()
+	canopy.name = "Parachute"
+	canopy.mesh = _canopy_mesh(outfit)
+	canopy.visible = false
+	add_child(canopy)
+
 	bone_global.resize(BONE_COUNT)
 	set_weapon(weapon_model)
 	animate(0.0)
+
+
+## Rectangular ram-air canopy (curved row of cells) with suspension lines.
+static func _canopy_mesh(outfit: Dictionary) -> ArrayMesh:
+	var mb := MeshBuilder.new()
+	var col: Color = outfit.get("shirt", Color(0.9, 0.4, 0.2))
+	var colors := [col, Color(0.97, 0.97, 0.95)]
+	var cells := 7
+	var span := 7.0
+	for k in cells:
+		var a := (float(k) / (cells - 1) - 0.5) * 1.6   # arc angle
+		var x := sin(a) * span * 0.62
+		var y := 4.6 + cos(a) * 1.2
+		mb.add_box(Vector3(x, y, 0.0), Vector3(span / cells + 0.08, 0.28, 2.6), colors[k % 2], Basis(Vector3.BACK, -a))
+		# Lines from the canopy edge to the shoulders.
+		mb.add_beam(Vector3(x, y - 0.15, -0.9), Vector3(signf(x) * 0.18, 1.55, -0.05), 0.02, Color(0.2, 0.2, 0.2))
+		mb.add_beam(Vector3(x, y - 0.15, 0.9), Vector3(signf(x) * 0.18, 1.55, 0.05), 0.02, Color(0.2, 0.2, 0.2))
+	var mat := MeshBuilder.make_vertex_color_material(0.8)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return mb.commit(mat)
 
 
 ## Shows the worn helmet / vest (&"" = none).
@@ -389,6 +420,13 @@ func animate(delta: float) -> void:
 	_kick = move_toward(_kick, 0.0, k * 12.0)
 	_punch = move_toward(_punch, 0.0, k * 4.5)
 	_use = move_toward(_use, 1.0 if using_item else 0.0, k * 4.0)
+	_fall = move_toward(_fall, 1.0 if air_pose == 2 else 0.0, k * 3.0)
+	_chute = move_toward(_chute, 1.0 if air_pose == 3 else 0.0, k * 2.5)
+	canopy.visible = _chute > 0.02 and not _dead
+	if canopy.visible:
+		# Canopy unfolds when opened.
+		var open := smoothstep(0.0, 1.0, _chute)
+		canopy.scale = Vector3(lerpf(0.15, 1.0, open), open, lerpf(0.3, 1.0, open))
 	if _dead:
 		_death_t = minf(_death_t + k * 2.2, 1.0)
 
@@ -427,6 +465,9 @@ func animate(delta: float) -> void:
 	# Swimming: body almost horizontal near the surface.
 	hips_pos = hips_pos.lerp(Vector3(0, 0.85, 0.3), _swim)
 	hips_pitch = lerpf(hips_pitch, -1.1, _swim)
+	# Freefall: spread-eagle, face down.
+	hips_pos = hips_pos.lerp(Vector3(0, 0.9, 0.2), _fall)
+	hips_pitch = lerpf(hips_pitch, -1.35, _fall)
 	var hips_basis := Basis(Vector3.UP, _hips_yaw) * Basis(Vector3.RIGHT, hips_pitch)
 
 	# Death: rotate the whole skeleton around the feet.
@@ -479,7 +520,7 @@ func animate(delta: float) -> void:
 	off.z += _kick * 0.06
 	gun_transform = Transform3D(gun_basis, anchor + gun_basis * off)
 	gun.transform = gun_transform
-	gun.visible = _armed and not _dead and _swim < 0.5
+	gun.visible = _armed and not _dead and _swim < 0.5 and _fall < 0.5 and _chute < 0.5
 
 	# ---- Arms (two-bone IK to the gun grips) ---------------------------------
 	var chest_b := g[B.CHEST].basis
@@ -495,6 +536,13 @@ func animate(delta: float) -> void:
 		_unarmed_hands(g, move_amt)
 		hand_l = _fist_l
 		hand_r = _fist_r
+	if _fall > 0.0:
+		hand_l = hand_l.lerp(g[B.CHEST] * Vector3(-0.55, 0.15, -0.1), _fall)
+		hand_r = hand_r.lerp(g[B.CHEST] * Vector3(0.55, 0.15, -0.1), _fall)
+	if _chute > 0.0:
+		# Hands up on the steering lines.
+		hand_l = hand_l.lerp(g[B.CHEST] * Vector3(-0.24, 0.62, 0.02), _chute)
+		hand_r = hand_r.lerp(g[B.CHEST] * Vector3(0.24, 0.62, 0.02), _chute)
 	if _use > 0.0:
 		# Hands together in front of the chest (bandaging / drinking).
 		var wobble := sin(_phase * 0.5 + _death_t) * 0.02
@@ -522,7 +570,9 @@ func animate(delta: float) -> void:
 		# Prone / swim: legs trail behind the hips.
 		var trail: Vector3 = g[B.HIPS] * Vector3(side * 0.13, -0.84, 0.02)
 		trail.y = maxf(trail.y, ANKLE_H)
-		foot = foot.lerp(trail, maxf(_prone, _swim))
+		foot = foot.lerp(trail, maxf(maxf(_prone, _swim), _fall))
+		if _fall > 0.0:
+			foot += g[B.HIPS].basis * Vector3(side * 0.12, 0.0, 0.0) * _fall
 		if _swim > 0.0:
 			foot.y += sin(_phase * 3.0 + ph) * 0.12 * _swim
 		if _dead:

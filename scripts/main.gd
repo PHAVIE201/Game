@@ -15,7 +15,7 @@ func _ready() -> void:
 	# Optional automation for headless tests / screenshots (see tools/README).
 	var args := OS.get_cmdline_user_args()
 	for a in args:
-		if a.begins_with("--autotest") or a.begins_with("--screenshots") or a.begins_with("--duel"):
+		if a.begins_with("--autotest") or a.begins_with("--screenshots") or a.begins_with("--duel") or a.begins_with("--matchsim"):
 			var script := load("res://scripts/debug/automation.gd") as GDScript
 			if script == null or not script.can_instantiate():
 				push_error("Automation script failed to load")

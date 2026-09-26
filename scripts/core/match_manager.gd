@@ -1,10 +1,10 @@
 class_name MatchManager
 extends Node
-## Match rules: spawning, alive tracking, win / lose, restart.
+## Match rules: spawning (in the plane), alive tracking, win / lose, restart.
 ##
-## States are ready for later phases:
-##   IDLE -> (phase 2: PLANE / DROPPING) -> IN_PROGRESS -> ENDED
-## Phase 1 spawns everyone on the ground directly.
+##   IDLE -> IN_PROGRESS -> ENDED
+## The plane flight is part of IN_PROGRESS: characters carry their own
+## AirState (plane / freefall / parachute) and the zone runs from the start.
 
 enum State { IDLE, IN_PROGRESS, ENDED }
 
@@ -19,6 +19,7 @@ var participants: Array[GameCharacter] = []
 var alive: Array[GameCharacter] = []
 var player: GameCharacter = null
 var match_start_msec := 0
+var plane: AirPlane = null
 
 var _characters_root: Node3D
 var _brains: Array[BotBrain] = []
@@ -39,7 +40,52 @@ func start_match(p_config: MatchConfig) -> void:
 	var world := Game.world
 	if Game.loot != null:
 		Game.loot.spawn_world_loot(world, _rng)
+	if config.use_plane:
+		_start_in_plane()
+	else:
+		_start_on_ground()
+	if Game.zone != null:
+		# With the plane, the first circle appears once the flight is over.
+		if plane != null:
+			var zone_seed := _rng.randi()
+			plane.route_finished.connect(func(): Game.zone.start(zone_seed, config.zone_time_scale), CONNECT_ONE_SHOT)
+		else:
+			Game.zone.start(_rng.randi(), config.zone_time_scale)
+	match_start_msec = Time.get_ticks_msec()
+	state = State.IN_PROGRESS
+	Events.match_started.emit()
+	Events.match_state_changed.emit(state)
+	Events.alive_count_changed.emit(alive.size(), participants.size())
+	if config.use_plane:
+		Events.hud_message.emit("%d người chơi trên máy bay - chờ cửa mở rồi nhấn F để nhảy" % participants.size(), 5.0)
+	else:
+		Events.hud_message.emit("%d người chơi - Hãy là người sống sót cuối cùng!" % participants.size(), 4.0)
 
+
+## Everyone boards the plane that flies across the island.
+func _start_in_plane() -> void:
+	plane = AirPlane.new()
+	plane.name = "Plane"
+	_characters_root.get_parent().add_child(plane)
+	plane.setup(_rng)
+	var p0 := plane.global_position
+	player = _spawn(PLAYER_SCENE, p0, atan2(-plane.dir.x, -plane.dir.z), "Bạn")
+	Game.player = player
+	_give_starting_kit(player)
+	player.board_plane(plane)
+	var used_names := {}
+	for i in config.bot_count:
+		var bot := _spawn(BOT_SCENE, p0, 0.0, NameGenerator.generate(_rng, used_names))
+		_give_starting_kit(bot)
+		bot.board_plane(plane)
+		var brain := bot.get_node("BotBrain") as BotBrain
+		if brain != null:
+			_brains.append(brain)
+
+
+## Test / debug start: player in a town square, bots on the ground around it.
+func _start_on_ground() -> void:
+	var world := Game.world
 	# Player: start in a random town square (open area by design).
 	var player_pos: Vector3
 	var towns := world.get_towns()
@@ -62,15 +108,6 @@ func start_match(p_config: MatchConfig) -> void:
 		var brain := bot.get_node("BotBrain") as BotBrain
 		if brain != null:
 			_brains.append(brain)
-
-	if Game.zone != null:
-		Game.zone.start(_rng.randi(), config.zone_time_scale)
-	match_start_msec = Time.get_ticks_msec()
-	state = State.IN_PROGRESS
-	Events.match_started.emit()
-	Events.match_state_changed.emit(state)
-	Events.alive_count_changed.emit(alive.size(), participants.size())
-	Events.hud_message.emit("%d người chơi - Hãy là người sống sót cuối cùng!" % participants.size(), 4.0)
 
 
 func _spawn(scene: PackedScene, pos: Vector3, yaw: float, display_name: String) -> GameCharacter:
@@ -129,6 +166,9 @@ func restart() -> void:
 
 func clear() -> void:
 	state = State.IDLE
+	if plane != null and is_instance_valid(plane):
+		plane.queue_free()
+	plane = null
 	if Game.zone != null:
 		Game.zone.stop()
 	for c in participants:

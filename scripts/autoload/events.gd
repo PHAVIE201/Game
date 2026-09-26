@@ -36,3 +36,5 @@ signal world_generation_progress(step: String, progress: float)
 signal hud_message(text: String, duration: float)
 ## Small feedback line above the health bar for the local player's looting.
 signal loot_message(text: String)
+## The plane's doors opened (true) or everyone was thrown out (false).
+signal plane_doors_changed(open: bool)

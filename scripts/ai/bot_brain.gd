@@ -71,6 +71,7 @@ func _build_states() -> void:
 	fsm.add(&"investigate", InvestigateState.new())
 	fsm.add(&"combat", CombatState.new())
 	fsm.add(&"zone", ZoneState.new())
+	fsm.add(&"parachute", ParachuteState.new())
 
 
 func _physics_process(delta: float) -> void:
@@ -80,6 +81,17 @@ func _physics_process(delta: float) -> void:
 	if Game.match_manager == null or Game.match_manager.state != MatchManager.State.IN_PROGRESS:
 		_idle_inputs()
 		return
+	if character.is_in_air():
+		# Plane / freefall / parachute: only the parachute behaviour runs.
+		if not fsm.is_in(&"parachute"):
+			fsm.change(&"parachute")
+		time += delta
+		fsm.update(delta)
+		return
+	if fsm.is_in(&"parachute"):
+		# Just landed.
+		(fsm.current as ParachuteState).on_landed()
+		fsm.change(&"idle")
 	_lod_delta += delta
 	_lod_counter += 1
 	if _lod_counter < lod_every:
@@ -120,9 +132,11 @@ func _check_zone(delta: float) -> void:
 	var pos := character.global_position
 	var go := not zone.is_inside(pos, 3.0)
 	if not go and not zone.is_inside_next(pos, 8.0):
+		# Be inside the next circle before it starts shrinking.
 		var dist := Vector2(pos.x, pos.z).distance_to(zone.next_center) - zone.next_radius
 		var travel := dist / GameCharacter.RUN_SPEED
-		go = zone.time_until_closed() < travel * 1.3 + profile.zone_margin
+		var deadline := zone.timer if zone.state == ZoneManager.State.WAITING else 0.0
+		go = deadline < travel * 1.3 + profile.zone_margin
 	if go:
 		fsm.change(&"zone")
 
@@ -248,6 +262,42 @@ func clear_target() -> void:
 	target = null
 
 
+## Landing spot for the parachute: next to a building (loot!) not too far
+## from the flight line, towns more likely than lone farms.
+func choose_drop_target(plane: AirPlane) -> Vector3:
+	var world := Game.world
+	var candidates: Array[Vector3] = []
+	var weights: Array[float] = []
+	for b in world.settlements.buildings:
+		var c := Vector3(b.center.x, b.floor_y, b.center.y)
+		if plane.lateral_distance(c) > 520.0:
+			continue
+		candidates.append(c)
+		weights.append(1.5 if b.town != "" else 1.0)
+	if candidates.is_empty() or rng.randf() < 0.08:
+		# A quiet spot in the countryside.
+		for k in 30:
+			var along := rng.randf_range(0.2, 0.8) * plane.length
+			var side := Vector3(-plane.dir.z, 0.0, plane.dir.x) * rng.randf_range(-450.0, 450.0)
+			var p := plane.point_at(along) + side
+			if world.is_walkable(p.x, p.z):
+				return Vector3(p.x, world.get_height(p.x, p.z), p.z)
+		return plane.point_at(plane.length * 0.5)
+	var total := 0.0
+	for w in weights:
+		total += w
+	var r := rng.randf() * total
+	var pick := candidates[0]
+	for k in candidates.size():
+		r -= weights[k]
+		if r <= 0.0:
+			pick = candidates[k]
+			break
+	# Land next to the building, not on its roof.
+	var ang := rng.randf() * TAU
+	return pick + Vector3(cos(ang), 0.0, sin(ang)) * rng.randf_range(9.0, 14.0)
+
+
 ## Random walkable destination inside the safe zone, biased toward towns
 ## and toward the next circle (where everybody ends up meeting).
 func pick_wander_destination() -> Vector3:
@@ -302,7 +352,7 @@ func on_enemy_seen(c: GameCharacter) -> void:
 
 
 func on_heard_shot(pos: Vector3, shooter: GameCharacter, radius: float) -> void:
-	if shooter == character or character.is_dead or fsm.is_in(&"combat"):
+	if shooter == character or character.is_dead or fsm.is_in(&"combat") or character.is_in_air():
 		return
 	if not can_target(shooter):
 		return
@@ -327,7 +377,7 @@ func _on_damaged(info: DamageInfo) -> void:
 		# The bot knows roughly where the shot came from.
 		target_last_seen_pos = attacker.global_position
 		target_last_seen_time = time - 1.0
-		if not fsm.is_in(&"combat"):
+		if not fsm.is_in(&"combat") and not character.is_in_air():
 			fsm.change(&"combat")
 
 

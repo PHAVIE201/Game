@@ -44,7 +44,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		character.cycle_fire_mode()
 		Sfx.play_2d(&"ui_click", -8.0)
 	elif event.is_action_pressed("interact"):
-		if Game.loot != null and Game.loot.player_target != null:
+		if character.air_state == GameCharacter.AirState.PLANE or character.air_state == GameCharacter.AirState.FREEFALL:
+			character.request_jump()
+		elif Game.loot != null and Game.loot.player_target != null:
 			Game.loot.take(character, Game.loot.player_target)
 	elif event.is_action_pressed("weapon_1"):
 		character.equip_slot(GameCharacter.SLOT_PRIMARY_1)

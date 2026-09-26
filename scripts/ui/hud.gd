@@ -23,6 +23,7 @@ const STANCE_NAMES := ["ĐỨNG", "NGỒI", "NẰM"]
 @onready var zone_label: Label = $Root/ZoneLabel
 @onready var zone_tint: ColorRect = $Root/ZoneTint
 @onready var world_map: Minimap = $Root/WorldMap
+@onready var air_label: Label = $Root/AirLabel
 
 var _msg_time := 0.0
 var _hint_time := 25.0
@@ -93,7 +94,8 @@ func _process(delta: float) -> void:
 			mode_label.text = "TỰ ĐỘNG" if mode_key == WeaponData.FireMode.AUTO else "PHÁT MỘT"
 		stance_label.text = "BƠI" if p.is_swimming else STANCE_NAMES[p.stance]
 		kills_label.text = "HẠ GỤC  %d" % p.kills
-	crosshair.visible = not p.is_dead
+	crosshair.visible = not p.is_dead and not p.is_in_air()
+	_update_air_label(p)
 	health_bar.visible = not p.is_dead
 
 	# Damage vignette (also pulses gently at low health).
@@ -146,6 +148,25 @@ func _update_pickup_prompt() -> void:
 		pickup_prompt.text = text
 
 
+func _update_air_label(p: GameCharacter) -> void:
+	var text := ""
+	if not p.is_dead:
+		match p.air_state:
+			GameCharacter.AirState.PLANE:
+				var plane := Game.match_manager.plane if Game.match_manager != null else null
+				var n := plane.passengers.size() if plane != null else 0
+				if plane != null and plane.doors_open:
+					text = "[F] / [Space]  NHẢY DÙ\nCòn %d người trên máy bay" % n
+				else:
+					text = "Máy bay đang bay tới đảo...  (M: xem đường bay)\nCòn %d người trên máy bay" % n
+			GameCharacter.AirState.FREEFALL:
+				text = "Độ cao %d m   [F] / [Space]: mở dù\nW + nhìn xuống: lao nhanh" % roundi(p.height_above_ground())
+			GameCharacter.AirState.PARACHUTE:
+				text = "Độ cao %d m\nW: xuống nhanh   S: giảm tốc   chuột: đổi hướng" % roundi(p.height_above_ground())
+	if air_label.text != text:
+		air_label.text = text
+
+
 func _update_zone(p: GameCharacter) -> void:
 	var zone := Game.zone
 	var text := ""
@@ -159,7 +180,7 @@ func _update_zone(p: GameCharacter) -> void:
 			_:
 				text = "Bo cuối"
 		text = "Pha %d/%d   %s" % [mini(zone.phase + 1, zone.get_phase_count()), zone.get_phase_count(), text]
-		if not p.is_dead:
+		if not p.is_dead and p.air_state != GameCharacter.AirState.PLANE:
 			outside = zone.distance_outside(p.global_position)
 			if outside > 0.0:
 				text += "\nNGOÀI BO  -  cách vùng an toàn %d m" % ceili(outside)

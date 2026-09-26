@@ -10,6 +10,7 @@ const POOL_3D := 24
 const POOL_2D := 8
 
 var _streams: Dictionary = {}          # StringName -> AudioStreamWAV
+var _loops: Dictionary = {}            # StringName -> looping AudioStreamWAV
 var _pool_3d: Array[AudioStreamPlayer3D] = []
 var _pool_2d: Array[AudioStreamPlayer] = []
 var _next_3d := 0
@@ -35,6 +36,11 @@ func _ready() -> void:
 		var p2 := AudioStreamPlayer.new()
 		add_child(p2)
 		_pool_2d.append(p2)
+
+
+## A seamlessly looping stream (engine drone, wind) for a dedicated player.
+func get_loop(sound: StringName) -> AudioStreamWAV:
+	return _loops.get(sound)
 
 
 ## Plays a positional sound. `pitch_var` randomizes pitch slightly for variety.
@@ -85,6 +91,9 @@ func _build_sounds() -> void:
 	_streams[&"shell_in"] = _make(_synth_click(0.07, 1100.0, 0.8))
 	_streams[&"bandage"] = _make(_synth_noise_burst(0.6, 0.12, 0.35))
 	_streams[&"drink"] = _make(_synth_tone(0.35, 180.0, 0.35, 6.0))
+	_streams[&"chute_open"] = _make(_synth_noise_burst(0.45, 0.25, 0.6))
+	_loops[&"plane_engine"] = _make_loop(_synth_engine(2.0))
+	_loops[&"wind"] = _make_loop(_synth_wind(2.0))
 	_streams[&"dry_fire"] = _make(_synth_click(0.05, 2400.0, 0.5))
 	_streams[&"mag_out"] = _make(_synth_click(0.09, 900.0, 0.7))
 	_streams[&"mag_in"] = _make(_synth_click(0.1, 1300.0, 0.9))
@@ -111,6 +120,49 @@ func _make(samples: PackedFloat32Array) -> AudioStreamWAV:
 	wav.stereo = false
 	wav.data = data
 	return wav
+
+
+func _make_loop(samples: PackedFloat32Array) -> AudioStreamWAV:
+	var wav := _make(samples)
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_begin = 0
+	wav.loop_end = samples.size()
+	return wav
+
+
+## Propeller drone: harmonics of a low fundamental + rumble. Whole numbers of
+## cycles in the loop so it repeats without a click.
+func _synth_engine(length: float) -> PackedFloat32Array:
+	var n := int(length * MIX_RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / MIX_RATE
+		lp += (_rng.randf_range(-1.0, 1.0) - lp) * 0.02
+		var s := sin(TAU * 42.0 * t) * 0.5 + sin(TAU * 84.0 * t) * 0.3 + sin(TAU * 126.0 * t) * 0.15
+		s *= 0.75 + 0.25 * sin(TAU * 6.0 * t)
+		out[i] = (s * 0.6 + lp * 2.5) * 0.5
+	return out
+
+
+## Wind: filtered noise, cross-faded at the loop point.
+func _synth_wind(length: float) -> PackedFloat32Array:
+	var n := int(length * MIX_RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in n:
+		lp += (_rng.randf_range(-1.0, 1.0) - lp) * 0.05
+		lp2 += (lp - lp2) * 0.1
+		out[i] = lp2 * 3.0
+	var fade := int(0.2 * MIX_RATE)
+	for i in fade:
+		var w := float(i) / fade
+		out[i] = out[i] * w + out[n - fade + i] * (1.0 - w)
+	out.resize(n - fade)
+	return out
 
 
 ## Gunshot = sharp noise crack + low "thump" + filtered noise tail.

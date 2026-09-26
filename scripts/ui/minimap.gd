@@ -65,6 +65,8 @@ func _draw() -> void:
 		_draw_grid()
 		_draw_towns()
 
+	_draw_plane_route()
+
 	# Zones
 	var zone := Game.zone
 	if zone != null and zone.is_active():
@@ -82,6 +84,20 @@ func _draw() -> void:
 
 	_draw_player()
 	draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.45), false, 2.0)
+
+
+func _draw_plane_route() -> void:
+	var mm := Game.match_manager
+	if mm == null or mm.plane == null or not is_instance_valid(mm.plane) or not mm.plane.is_active():
+		return
+	var plane := mm.plane
+	var a := world_to_map(Vector2(plane.start.x, plane.start.z))
+	var b := world_to_map(Vector2(plane.end.x, plane.end.z))
+	draw_dashed_line(a, b, Color(1.0, 0.85, 0.3, 0.9), 2.0, 10.0)
+	var pp := world_to_map(Vector2(plane.global_position.x, plane.global_position.z))
+	var d := Vector2(plane.dir.x, plane.dir.z)
+	var n := Vector2(-d.y, d.x)
+	draw_colored_polygon(PackedVector2Array([pp + d * 9.0, pp - d * 6.0 + n * 7.0, pp - d * 3.0, pp - d * 6.0 - n * 7.0]), Color(1.0, 0.85, 0.3))
 
 
 func _draw_player() -> void:

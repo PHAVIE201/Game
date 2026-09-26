@@ -23,6 +23,8 @@ var _ads_t := 0.0
 var _shake := 0.0
 var _death_orbit := 0.0
 var _ray := PhysicsRayQueryParameters3D.new()
+var _distance := HIP_DISTANCE
+var _wind: AudioStreamPlayer
 
 
 func _ready() -> void:
@@ -42,7 +44,27 @@ func _ready() -> void:
 	camera.current = true
 	_ray.collision_mask = Layers.WORLD
 	Game.camera = camera
+	_wind = AudioStreamPlayer.new()
+	_wind.stream = Sfx.get_loop(&"wind")
+	_wind.volume_db = -60.0
+	add_child(_wind)
 	target.weapon_fired.connect(_on_fired)
+
+
+## Rushing air while falling / gliding.
+func _update_wind(delta: float) -> void:
+	var want := -60.0
+	if not target.is_dead:
+		match target.air_state:
+			GameCharacter.AirState.FREEFALL:
+				want = linear_to_db(clampf(target.velocity.length() / 55.0, 0.05, 1.0)) - 2.0
+			GameCharacter.AirState.PARACHUTE:
+				want = -16.0
+	_wind.volume_db = lerpf(_wind.volume_db, want, 1.0 - exp(-3.0 * delta))
+	if _wind.volume_db > -50.0 and not _wind.playing:
+		_wind.play()
+	elif _wind.volume_db <= -55.0 and _wind.playing:
+		_wind.stop()
 
 
 func _on_fired() -> void:
@@ -68,7 +90,19 @@ func _process(delta: float) -> void:
 		pivot_h = 1.5
 	if target.is_dead:
 		pivot_h = 0.9
+	var air_distance := 0.0
+	match target.air_state:
+		GameCharacter.AirState.PLANE:
+			pivot_h = 9.0
+			air_distance = 48.0
+		GameCharacter.AirState.FREEFALL:
+			pivot_h = 1.0
+			air_distance = 6.0
+		GameCharacter.AirState.PARACHUTE:
+			pivot_h = 2.4
+			air_distance = 8.5
 	_pivot_y = lerpf(_pivot_y, pivot_h, 1.0 - exp(-10.0 * delta))
+	_update_wind(delta)
 
 	var want_ads := target.input_aim and not target.is_sprinting and not target.is_dead
 	_ads_t = move_toward(_ads_t, 1.0 if want_ads else 0.0, delta * 7.0)
@@ -77,6 +111,10 @@ func _process(delta: float) -> void:
 	var yaw := target.aim_yaw + deg_to_rad(target.weapon.recoil_yaw)
 	var pitch := target.aim_pitch + deg_to_rad(target.weapon.recoil_pitch)
 	var distance := lerpf(HIP_DISTANCE, ADS_DISTANCE, ease_t)
+	if air_distance > 0.0:
+		distance = air_distance
+	_distance = lerpf(_distance, distance, 1.0 - exp(-4.0 * delta))
+	distance = _distance
 	if target.is_dead:
 		# Slow orbit around the body after death.
 		_death_orbit += delta * 0.25
@@ -86,7 +124,7 @@ func _process(delta: float) -> void:
 
 	var yaw_basis := Basis(Vector3.UP, yaw)
 	var head := visual_pos + Vector3(0, _pivot_y, 0)
-	var shoulder := lerpf(HIP_SHOULDER, ADS_SHOULDER, ease_t) * (0.0 if target.is_dead else 1.0)
+	var shoulder := lerpf(HIP_SHOULDER, ADS_SHOULDER, ease_t) * (0.0 if target.is_dead or target.is_in_air() else 1.0)
 	var pivot := head + yaw_basis * Vector3(shoulder, 0, 0)
 	# Keep the pivot out of walls when hugging them on the right side.
 	_ray.from = head
@@ -99,6 +137,8 @@ func _process(delta: float) -> void:
 	spring.spring_length = distance
 	var ads_fov := target.weapon_data.ads_fov if target.weapon_data != null else 55.0
 	camera.fov = lerpf(Settings.fov, ads_fov, ease_t)
+
+	camera.far = 3000.0 if target.is_in_air() else 1700.0
 
 	# Small shake when firing.
 	_shake = move_toward(_shake, 0.0, delta * 6.0)

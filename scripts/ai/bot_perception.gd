@@ -36,7 +36,7 @@ func scan() -> void:
 	var best_score := INF
 	var now := Time.get_ticks_msec()
 	for c in Game.match_manager.alive:
-		if c == me or c.is_dead or not brain.can_target(c):
+		if c == me or not c.is_targetable() or not brain.can_target(c):
 			continue
 		var to := c.global_position - me.global_position
 		var d := to.length()

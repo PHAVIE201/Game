@@ -99,6 +99,8 @@ func _rebuild_grid() -> void:
 		return
 	var r: float = sqrt(CharacterHitboxes.BROADPHASE_RADIUS_SQ)
 	for c in Game.match_manager.alive:
+		if not c.is_targetable():
+			continue
 		var p := c.global_position
 		for gx in range(floori((p.x - r) / GRID_CELL), floori((p.x + r) / GRID_CELL) + 1):
 			for gz in range(floori((p.z - r) / GRID_CELL), floori((p.z + r) / GRID_CELL) + 1):
@@ -243,7 +245,7 @@ func raycast(from: Vector3, to: Vector3, exclude: GameCharacter = null, include_
 		result = {"position": hit.position, "normal": hit.normal, "distance": best, "character": null, "part": -1}
 	if include_characters and Game.match_manager != null:
 		for c in Game.match_manager.alive:
-			if c == exclude or c.is_dead:
+			if c == exclude or not c.is_targetable():
 				continue
 			var center := c.get_hitbox_center()
 			var q := Geometry3D.get_closest_point_to_segment(center, from, from + dir * best)

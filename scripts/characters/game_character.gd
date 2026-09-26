@@ -10,6 +10,8 @@ extends CharacterBody3D
 ## (parachuting, vehicles, inventory, healing...) be added once for everyone.
 
 enum Stance { STAND, CROUCH, PRONE }
+## Start of the match: in the plane, falling, under the parachute, or landed (NONE).
+enum AirState { NONE, PLANE, FREEFALL, PARACHUTE }
 
 signal died(info: DamageInfo)
 signal damaged(info: DamageInfo)
@@ -20,6 +22,7 @@ signal weapon_changed
 signal weapon_fired
 ## A helmet / vest was destroyed by damage.
 signal armor_broken(id: StringName)
+signal air_state_changed(state: int)
 
 const RADIUS := 0.3
 const HEIGHTS := [1.75, 1.15, 0.62]
@@ -49,6 +52,15 @@ const SWAP_TIME := 0.55
 ## Boost bar (energy drink / painkiller): drains over time and heals meanwhile.
 const BOOST_MAX := 100.0
 const BOOST_DECAY := 0.6
+
+## Freefall / parachute tuning (m, m/s).
+const FREEFALL_FALL := 42.0
+const FREEFALL_DIVE := 60.0
+const FREEFALL_SPEED := 32.0
+const CHUTE_AUTO_HEIGHT := 110.0
+const CHUTE_FALL := 6.5
+const CHUTE_FALL_FAST := 10.0
+const CHUTE_SPEED := 16.0
 
 @export var is_player := false
 @export var display_name := "Người chơi"
@@ -88,6 +100,9 @@ var weapon: Weapon
 ## Shortcut to weapon.data.
 var weapon_data: WeaponData
 var fists: Weapon
+var air_state: int = AirState.NONE
+## The plane while on board (null otherwise).
+var plane: AirPlane = null
 ## 0..100, see BOOST_*.
 var boost := 0.0
 ## Heal / boost item being used (&"" = none).
@@ -110,6 +125,7 @@ var _bolt_sound_pending := false
 var _use_left := 0.0
 var _use_total := 0.0
 var _worn := []
+var _air_time_total := 0.0
 var _stance_request := -1
 var _collision: CollisionShape3D
 var _capsule: CapsuleShape3D
@@ -160,6 +176,7 @@ func _ready() -> void:
 # Controller API
 # --------------------------------------------------------------------------
 
+## Jump; in the plane: jump out; in freefall: open the parachute.
 func request_jump() -> void:
 	_jump_requested = true
 
@@ -374,12 +391,145 @@ func clear_loadout() -> void:
 
 ## Takes damage from the zone (false while still in the plane).
 func is_zone_vulnerable() -> bool:
-	return not is_dead
+	return not is_dead and air_state != AirState.PLANE
+
+
+## Can be seen / shot (false while hidden inside the plane).
+func is_targetable() -> bool:
+	return not is_dead and air_state != AirState.PLANE
+
+
+func is_in_air() -> bool:
+	return air_state != AirState.NONE
 
 
 ## Can pick up / use items right now.
 func can_interact() -> bool:
-	return not is_dead and not is_swimming
+	return not is_dead and not is_swimming and air_state == AirState.NONE
+
+
+# --------------------------------------------------------------------------
+# Plane, freefall, parachute
+# --------------------------------------------------------------------------
+
+func board_plane(p: AirPlane) -> void:
+	plane = p
+	p.board(self)
+	_set_air_state(AirState.PLANE)
+	collision_layer = 0
+	collision_mask = 0
+	model.visible = false
+	global_position = p.global_position
+	velocity = Vector3.ZERO
+
+
+func jump_from_plane() -> void:
+	if air_state != AirState.PLANE:
+		return
+	if plane != null:
+		plane.leave(self)
+		velocity = plane.get_velocity() * 0.5
+		global_position = plane.global_position + Vector3(0, -6.0, 0) - plane.dir * 14.0
+	velocity.y = -8.0
+	plane = null
+	model.visible = true
+	stance = Stance.STAND
+	_apply_stance_shape()
+	_set_air_state(AirState.FREEFALL)
+
+
+func open_parachute() -> void:
+	if air_state != AirState.FREEFALL:
+		return
+	collision_layer = Layers.CHARACTERS
+	collision_mask = Layers.CHARACTER_MASK
+	velocity.y = maxf(velocity.y, -14.0)
+	_set_air_state(AirState.PARACHUTE)
+	_play_weapon_sound(&"chute_open")
+
+
+## Height above the ground (or the sea) under the character.
+func height_above_ground() -> float:
+	if Game.world == null:
+		return 0.0
+	var g := maxf(Game.world.get_height(global_position.x, global_position.z), HeightMap.WATER_LEVEL)
+	return global_position.y - g
+
+
+func _set_air_state(s: int) -> void:
+	air_state = s
+	_air_time_total = 0.0
+	_jump_requested = false
+	if model != null:
+		model.air_pose = s
+	air_state_changed.emit(s)
+
+
+func _update_air(delta: float) -> void:
+	_air_time_total += delta
+	var yaw_basis := Basis(Vector3.UP, aim_yaw)
+	match air_state:
+		AirState.PLANE:
+			if plane != null and is_instance_valid(plane):
+				global_position = plane.global_position
+				velocity = plane.get_velocity()
+				if _jump_requested and plane.doors_open:
+					jump_from_plane()
+			_jump_requested = false
+		AirState.FREEFALL:
+			var wish := yaw_basis * Vector3(input_move.x, 0.0, -input_move.y)
+			var dive := clampf(-aim_pitch, 0.0, 1.0) * maxf(input_move.y, 0.0)
+			var target := wish.limit_length(1.0) * FREEFALL_SPEED * (1.0 + 0.3 * dive)
+			var w := 1.0 - exp(-1.2 * delta)
+			velocity.x = lerpf(velocity.x, target.x, w)
+			velocity.z = lerpf(velocity.z, target.z, w)
+			velocity.y = lerpf(velocity.y, -lerpf(FREEFALL_FALL, FREEFALL_DIVE, dive), 1.0 - exp(-1.5 * delta))
+			global_position += velocity * delta
+			_clamp_to_map()
+			if _jump_requested or height_above_ground() < CHUTE_AUTO_HEIGHT:
+				open_parachute()
+			_jump_requested = false
+		AirState.PARACHUTE:
+			var fwd_amt := clampf(input_move.y, -1.0, 1.0)
+			var speed := CHUTE_SPEED + fwd_amt * 4.0
+			var target := yaw_basis * Vector3(input_move.x * 4.0, 0.0, -speed)
+			var w := 1.0 - exp(-1.0 * delta)
+			velocity.x = lerpf(velocity.x, target.x, w)
+			velocity.z = lerpf(velocity.z, target.z, w)
+			var fall := lerpf(CHUTE_FALL, CHUTE_FALL_FAST, maxf(fwd_amt, 0.0))
+			velocity.y = lerpf(velocity.y, -fall, 1.0 - exp(-2.0 * delta))
+			move_and_slide()
+			_clamp_to_map()
+			var in_water := global_position.y < HeightMap.WATER_LEVEL - 0.6
+			if is_on_floor() or in_water or _air_time_total > 150.0:
+				_land()
+			_jump_requested = false
+
+
+## Leaves any air state and stands at `pos` (tests / debug tools).
+func place_on_ground(pos: Vector3) -> void:
+	if air_state == AirState.PLANE and plane != null:
+		plane.leave(self)
+	plane = null
+	collision_layer = Layers.CHARACTERS
+	collision_mask = Layers.CHARACTER_MASK
+	model.visible = true
+	global_position = pos + Vector3(0, 0.1, 0)
+	velocity = Vector3.ZERO
+	if air_state != AirState.NONE:
+		_set_air_state(AirState.NONE)
+
+
+func _land() -> void:
+	velocity = Vector3(velocity.x * 0.3, 0.0, velocity.z * 0.3)
+	_set_air_state(AirState.NONE)
+	Sfx.play_3d(&"step", global_position, -4.0, 0.1, 60.0)
+
+
+func _clamp_to_map() -> void:
+	var lim := HeightMap.HALF - 40.0
+	global_position.x = clampf(global_position.x, -lim, lim)
+	global_position.z = clampf(global_position.z, -lim, lim)
 
 
 func has_any_gun() -> bool:
@@ -461,12 +611,18 @@ func get_time_alive() -> float:
 
 func _physics_process(delta: float) -> void:
 	_prev_pos = _curr_pos
+	if air_state != AirState.NONE and not is_dead:
+		_update_air(delta)
+		model.rotation.y = lerp_angle(model.rotation.y, aim_yaw, clampf(delta * 8.0, 0.0, 1.0))
+		_curr_pos = global_position
+		return
 	if is_dead:
 		# Corpse: just settle on the ground.
 		velocity.x = move_toward(velocity.x, 0.0, 10.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, 10.0 * delta)
 		if not is_on_floor():
-			velocity.y -= GRAVITY * delta
+			# Capped so a body falling from the sky cannot tunnel into the ground.
+			velocity.y = maxf(velocity.y - GRAVITY * delta, -25.0)
 		move_and_slide()
 		_curr_pos = global_position
 		return
@@ -743,6 +899,13 @@ func _modify_incoming_damage(info: DamageInfo) -> float:
 
 
 func _die(info: DamageInfo) -> void:
+	if air_state == AirState.PLANE and plane != null:
+		plane.leave(self)
+		plane = null
+	elif air_state != AirState.NONE:
+		model.visible = true
+	if air_state != AirState.NONE:
+		_set_air_state(AirState.NONE)
 	is_dead = true
 	death_time_msec = Time.get_ticks_msec()
 	collision_layer = 0

@@ -41,7 +41,7 @@ Renderer: **Forward+** (Vulkan / D3D12 / Metal). Card đồ họa rất cũ khô
 | **W A S D** | Di chuyển |
 | **Shift** (giữ) | Chạy nhanh (chỉ khi đi tới, không ngắm / bắn) |
 | **Ctrl** (giữ) | Đi bộ chậm |
-| **Space** | Nhảy (khi đang ngồi / nằm thì đứng dậy) |
+| **Space** | Nhảy (khi đang ngồi / nằm thì đứng dậy). Trên máy bay: nhảy dù; khi rơi tự do: mở dù |
 | **C** | Ngồi / đứng |
 | **Z** | Nằm / đứng |
 | **Chuột** | Xoay camera |
@@ -52,7 +52,7 @@ Renderer: **Forward+** (Vulkan / D3D12 / Metal). Card đồ họa rất cũ khô
 | **1 / 2 / 3** | Cầm súng chính 1 / súng chính 2 / súng lục |
 | **Lăn chuột** | Đổi sang súng kế tiếp / trước đó |
 | **X** | Cất súng (tay không, chuột trái để đấm) |
-| **F** | Nhặt món đồ đang nhìn vào (có dòng nhắc ở giữa màn hình) |
+| **F** | Nhặt món đồ đang nhìn vào (có dòng nhắc ở giữa màn hình). Trên máy bay: nhảy; khi rơi: mở dù |
 | **Tab** | Mở / đóng túi đồ (nhặt, bỏ, dùng đồ, cầm súng bằng chuột) |
 | **M** | Mở / đóng bản đồ lớn |
 | **H** | Hồi máu nhanh (tự chọn băng gạc / sơ cứu / hộp y tế hợp với lượng máu) |
@@ -195,8 +195,24 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
   toàn khi đang ở ngoài, mũi tên hướng nhìn. Phía trên minimap: pha, thời gian đếm ngược, khoảng cách tới bo.
 - **Bản đồ lớn (M)**: toàn đảo, lưới A–H / 1–8, tên các làng, vòng bo. Ảnh bản đồ vẽ một lần lúc loading
   (512 × 512, khoảng 0.8 giây).
-- Bot có trạng thái mới **Zone**: tự chạy vào vòng trắng khi đang ngoài bo hoặc khi thời gian còn lại không đủ
-  để đi bộ vào (mỗi bot có độ "cẩn thận" riêng); đi lang thang thì ưu tiên điểm trong bo. Bot tạm thời vẫn xuất phát với một
+- Bot có trạng thái mới **Zone**: tự chạy vào vòng trắng khi đang ngoài bo hoặc khi thời gian còn lại trước lúc
+  bo bắt đầu thu không đủ để đi bộ vào (mỗi bot có độ "cẩn thận" riêng); đi lang thang thì ưu tiên điểm trong bo.
+
+**2.5 Máy bay và nhảy dù** ✔
+- Mọi người (cả bot) bắt đầu trên **máy bay** bay thẳng qua đảo ở độ cao 480 m, 65 m/s, hướng và vị trí ngẫu
+  nhiên mỗi trận. Máy bay low-poly 4 động cơ (cánh quạt quay, tiếng động cơ tổng hợp). Đường bay hiện trên
+  minimap / bản đồ (nét đứt vàng + biểu tượng máy bay).
+- Cửa mở khi máy bay vào trên đảo; ai còn trên máy bay lúc nó rời đảo sẽ bị đẩy ra. Trên máy bay không bị bo,
+  không bị nhìn thấy / bắn trúng. Camera lùi xa để nhìn máy bay.
+- **Rơi tự do**: 42 m/s (nhìn xuống + W để lao nhanh tới 60 m/s), bay ngang tới 32 m/s. Dù tự mở ở 110 m
+  trên mặt đất, hoặc bấm F / Space để mở sớm và lượn xa hơn. Có tiếng gió theo tốc độ.
+- **Dù**: lượn 16 m/s, rơi 6.5 m/s; W lượn nhanh và xuống nhanh hơn, S giảm tốc, chuột đổi hướng. Tán dù
+  sinh bằng code (màu theo áo). Chạm đất / mặt nước là đáp xuống.
+- Vòng bo đầu tiên xuất hiện khi máy bay bay hết đường.
+- **Bot**: trạng thái mới **Parachute**: chọn chỗ đáp cạnh một ngôi nhà (ưu tiên làng) trong khoảng 520 m từ
+  đường bay (thỉnh thoảng chọn chỗ vắng), tính thời điểm nhảy, lao / mở dù sớm tùy khoảng cách, đáp trúng chỗ
+  chọn (sai lệch trung vị vài mét).
+- Dòng nhắc giữa màn hình: số người còn trên máy bay, độ cao, phím mở dù. Bot tạm thời vẫn xuất phát với một
   súng chính ngẫu nhiên và đạn không giới hạn (bot biết nhặt đồ ở giai đoạn 3); khi chết bot rơi súng và
   vài hộp đạn.
 
@@ -212,7 +228,7 @@ Main (scenes/main)  ── MainMenu, LoadingScreen
      ├─ FxManager        pool hiệu ứng / decal
      ├─ LootManager      đồ nằm đất, luật nhặt / bỏ / rơi đồ khi chết
      ├─ ZoneManager      bo: các pha, tường bo, sát thương ngoài bo
-     ├─ MatchManager     spawn, đếm người sống, thắng/thua, chơi lại
+     ├─ MatchManager     máy bay (AirPlane), đếm người sống, thắng/thua, chơi lại
      └─ HUD, InventoryScreen, EndScreen, PauseMenu
 
 Autoload: Events (signal bus) · Game (service locator) · Settings (lưu cấu hình) · Sfx (âm thanh)
@@ -228,15 +244,15 @@ sau này (túi đồ, giáp, hồi máu, nhảy dù, lái xe) chỉ cần viết
 scenes/            main/ game/ characters/ ui/        (các scene .tscn)
 scripts/
   autoload/        events, game, settings, sfx
-  core/            game_session, match_manager, match_config, zone_manager, layers, mesh_builder,
-                   name_generator
+  core/            game_session, match_manager, match_config, zone_manager, air_plane, layers,
+                   mesh_builder, name_generator
   world/           game_world, height_map, terrain_builder, settlements, vegetation
   characters/      game_character, character_model, character_hitboxes, player_controller,
                    third_person_camera, inventory
   items/           item_db (danh mục đồ), item_models, loot_manager (đồ nằm đất + luật nhặt/bỏ)
   weapons/         weapon_data (Resource), weapon_db, weapon, projectile_system, weapon_models, damage_info
   ai/              bot_brain, bot_perception, bot_navigator, bot_profile, state_machine, bot_state
-  ai/states/       idle, wander, investigate, combat, zone
+  ai/states/       idle, wander, investigate, combat, zone, parachute
   fx/  ui/  debug/ (automation cho test headless)
 resources/         weapons/*.tres (6 súng + tay không), ui/theme.tres
 shaders/           foliage, water, tracer, zone_wall
@@ -306,6 +322,7 @@ Các lệnh lẻ khác:
 ```bash
 godot --headless --path . -- --autotest=40 --bots=8        # chạy thử trận
 godot --headless --path . -- --duel=10,25,50,100 --bots=3  # đo độ chính xác của bot
+godot --headless --path . -- --matchsim=600 --bots=24      # trận toàn bot: thống kê nhảy dù, bo, giao tranh
 godot --headless --path . res://tools/worldgen_test.tscn -- 1337 map.png   # xuất bản đồ PNG theo seed
 godot --path . -- --screenshots=out_dir                    # chụp màn hình các cảnh (cần GPU/xvfb)
 godot --path . res://tools/pose_gallery.tscn -- poses.png  # ảnh tổng hợp các tư thế
