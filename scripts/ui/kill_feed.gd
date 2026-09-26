@@ -11,7 +11,9 @@ func add_entry(killer: String, victim: String, weapon: String, headshot: bool, i
 	var how := weapon if weapon != "" else "?"
 	if headshot:
 		how += ", trúng đầu"
-	if killer == "":
+	if killer == "" and weapon != "":
+		label.text = "%s đã gục trong %s" % [victim, weapon.to_lower()]
+	elif killer == "":
 		label.text = "%s đã bị loại" % victim
 	else:
 		label.text = "%s  [%s]  %s" % [killer, how, victim]

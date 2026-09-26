@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/pause_menu.tscn" id="8_pause"]
 [ext_resource type="Script" path="res://scripts/items/loot_manager.gd" id="9_loot"]
 [ext_resource type="Script" path="res://scripts/ui/inventory_screen.gd" id="10_inv"]
+[ext_resource type="Script" path="res://scripts/core/zone_manager.gd" id="11_zone"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.28, 0.55, 0.92, 1)
@@ -76,6 +77,9 @@ script = ExtResource("4_fx")
 
 [node name="Loot" type="Node3D" parent="."]
 script = ExtResource("9_loot")
+
+[node name="Zone" type="Node3D" parent="."]
+script = ExtResource("11_zone")
 
 [node name="Match" type="Node" parent="."]
 script = ExtResource("5_match")

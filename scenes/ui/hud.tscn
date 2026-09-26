@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/ui/kill_feed.gd" id="5_feed"]
 [ext_resource type="Script" path="res://scripts/ui/weapon_slots.gd" id="6_slots"]
 [ext_resource type="Script" path="res://scripts/ui/armor_status.gd" id="7_armor"]
+[ext_resource type="Script" path="res://scripts/ui/minimap.gd" id="8_minimap"]
 
 [sub_resource type="Gradient" id="vig_gradient"]
 offsets = PackedFloat32Array(0.5, 1)
@@ -53,6 +54,16 @@ grow_vertical = 2
 mouse_filter = 2
 texture = SubResource("vig_tex")
 expand_mode = 1
+
+[node name="ZoneTint" type="ColorRect" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.15, 0.35, 1, 0)
 
 [node name="Crosshair" type="Control" parent="Root"]
 layout_mode = 1
@@ -278,21 +289,62 @@ theme_override_colors/font_color = Color(0.7, 1, 0.7, 1)
 theme_override_font_sizes/font_size = 15
 text = "FPS"
 
-[node name="HintLabel" type="Label" parent="Root"]
+[node name="Minimap" type="Control" parent="Root"]
 layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 18.0
-offset_top = -150.0
-offset_right = 760.0
-offset_bottom = -16.0
+offset_top = -262.0
+offset_right = 258.0
+offset_bottom = -22.0
 grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("8_minimap")
+
+[node name="ZoneLabel" type="Label" parent="Root"]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = -326.0
+offset_right = 420.0
+offset_bottom = -268.0
+grow_vertical = 0
+theme_override_constants/outline_size = 5
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.7)
+theme_override_font_sizes/font_size = 18
+vertical_alignment = 2
+
+[node name="WorldMap" type="Control" parent="Root"]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -410.0
+offset_top = -410.0
+offset_right = 410.0
+offset_bottom = 410.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("8_minimap")
+full_map = true
+
+[node name="HintLabel" type="Label" parent="Root"]
+layout_mode = 1
+offset_left = 18.0
+offset_top = 124.0
+offset_right = 760.0
+offset_bottom = 280.0
 theme_override_colors/font_color = Color(1, 1, 1, 0.85)
 theme_override_font_sizes/font_size = 15
 text = "WASD: di chuyển   Shift: chạy nhanh   Ctrl: đi bộ   Space: nhảy
 C: ngồi   Z: nằm   Chuột trái: bắn   Chuột phải (giữ): ngắm
 R: nạp đạn   B: đổi chế độ bắn   1/2/3, lăn chuột: đổi súng   X: cất súng
 F: nhặt đồ   Tab: túi đồ   H: hồi máu nhanh   4-8: băng gạc/sơ cứu/y tế/tăng lực/giảm đau
-Esc: tạm dừng   F3: hiệu năng"
-vertical_alignment = 2
+M: bản đồ   Esc: tạm dừng   F3: hiệu năng"

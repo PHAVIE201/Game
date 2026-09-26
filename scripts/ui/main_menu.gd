@@ -9,6 +9,7 @@ signal start_requested(config: MatchConfig)
 @onready var seed_random: Button = $Center/Panel/VBox/Grid/SeedRow/Random
 @onready var difficulty_option: OptionButton = $Center/Panel/VBox/Grid/Difficulty
 @onready var quality_option: OptionButton = $Center/Panel/VBox/Grid/Quality
+@onready var zone_option: OptionButton = $Center/Panel/VBox/Grid/ZoneSpeed
 @onready var sens_slider: HSlider = $Center/Panel/VBox/Grid/Sensitivity
 @onready var start_button: Button = $Center/Panel/VBox/Buttons/Start
 @onready var quit_button: Button = $Center/Panel/VBox/Buttons/Quit
@@ -19,6 +20,10 @@ func _ready() -> void:
 	difficulty_option.add_item("Thường", MatchConfig.Difficulty.NORMAL)
 	difficulty_option.add_item("Khó", MatchConfig.Difficulty.HARD)
 	difficulty_option.select(1)
+	zone_option.add_item("Bình thường (~9 phút)", 0)
+	zone_option.add_item("Nhanh (~6 phút)", 1)
+	zone_option.add_item("Rất nhanh (~3 phút)", 2)
+	zone_option.select(0)
 	for q in 3:
 		quality_option.add_item(Settings.quality_name(q), q)
 	quality_option.select(quality_option.get_item_index(Settings.graphics_quality))
@@ -40,6 +45,7 @@ func _on_start() -> void:
 	cfg.bot_count = int(bots_spin.value)
 	cfg.map_seed = int(seed_spin.value)
 	cfg.difficulty = difficulty_option.get_selected_id()
+	cfg.zone_time_scale = [1.0, 0.65, 0.35][zone_option.get_selected_id()]
 	# Many bots: spread them wider so the start is not a massacre.
 	cfg.spawn_radius = clampf(250.0 + cfg.bot_count * 12.0, 300.0, 900.0)
 	Settings.last_bot_count = cfg.bot_count

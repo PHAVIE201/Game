@@ -372,6 +372,11 @@ func clear_loadout() -> void:
 	inventory.clear()
 
 
+## Takes damage from the zone (false while still in the plane).
+func is_zone_vulnerable() -> bool:
+	return not is_dead
+
+
 ## Can pick up / use items right now.
 func can_interact() -> bool:
 	return not is_dead and not is_swimming

@@ -8,7 +8,9 @@ extends Node
 ##                            real renderer, e.g. under xvfb), then quit.
 ##   --duel=d1,d2,...         bot accuracy test: one bot shoots at the (immortal,
 ##                            standing) player from each distance for 10 s.
-##   --bots=N  --seed=S       match options for all modes.
+##   --matchsim=seconds       bots-only match (the player is parked out of reach)
+##                            with statistics about zone, fights and bot states.
+##   --bots=N  --seed=S  --zone=scale   match options for all modes.
 ##
 ## Example (headless smoke test):
 ##   godot --headless --path . -- --autotest=60 --bots=8
@@ -19,6 +21,9 @@ var duration := 40.0
 var out_dir := "user://screenshots"
 var bots := 8
 var map_seed := 1337
+var zone_scale := 1.0
+var _sim_started := false
+var _sim := {"zone_deaths": 0, "gun_deaths": 0, "other_deaths": 0}
 
 var _t := 0.0
 var _phase := 0
@@ -73,6 +78,12 @@ func _ready() -> void:
 			bots = int(a.split("=")[1])
 		elif a.begins_with("--seed="):
 			map_seed = int(a.split("=")[1])
+		elif a.begins_with("--zone="):
+			zone_scale = float(a.split("=")[1])
+		elif a.begins_with("--matchsim"):
+			mode = "matchsim"
+			if "=" in a:
+				duration = float(a.split("=")[1])
 	Events.shot_fired.connect(func(_s, _p, _r): _stats.shots += 1)
 	Events.character_damaged.connect(func(_v, info):
 		_stats.hits += 1
@@ -83,6 +94,7 @@ func _ready() -> void:
 	var cfg := MatchConfig.new()
 	cfg.bot_count = bots
 	cfg.map_seed = map_seed
+	cfg.zone_time_scale = zone_scale
 	print("[auto] mode=%s bots=%d seed=%d" % [mode, bots, map_seed])
 	watchdog.start(duration + 240.0)
 	main.call_deferred("start_game", cfg)
@@ -114,6 +126,8 @@ func _process(delta: float) -> void:
 	elif mode == "duel" and not _duel_started:
 		_duel_started = true
 		_run_duels()
+	elif mode == "matchsim":
+		_run_matchsim(delta)
 
 
 # --------------------------------------------------------------------------
@@ -271,6 +285,7 @@ func _weapon_check() -> void:
 	print("[auto] weapon check: ", " ".join(report), " active=", p.weapon_data.id)
 	await _loot_check(p)
 	await _armor_heal_check(p)
+	await _zone_check(p)
 	Events.character_damaged.disconnect(on_dmg)
 	p.input_aim = false
 	p.max_health = 100.0
@@ -296,6 +311,41 @@ func _hit(p: GameCharacter, part: int, amount: float) -> void:
 	info.part = part
 	info.direction = Vector3.FORWARD
 	p.apply_damage(info)
+
+
+## Runs every zone phase at 1% of the normal duration: circles must nest and
+## the zone must hurt whoever stands outside.
+func _zone_check(p: GameCharacter) -> void:
+	var zone := Game.zone
+	var ok := zone.state == ZoneManager.State.WAITING and is_equal_approx(zone.radius, ZoneManager.START_RADIUS)
+	if Game.world.map_texture == null:
+		_checks_failed.append("no map texture")
+	var circles := []
+	var record := func(_zone_phase, state):
+		if state == ZoneManager.State.WAITING:
+			circles.append([zone.next_center, zone.next_radius])
+	zone.phase_changed.connect(record)
+	zone.start(4242, 0.01)
+	var hp0 := p.health
+	var hud := main.session.get_node("HUD") as GameHUD
+	hud.world_map.visible = true
+	await _wait(6.5)
+	hud.world_map.visible = false
+	zone.phase_changed.disconnect(record)
+	var nested := true
+	for k in range(1, circles.size()):
+		var a: Array = circles[k - 1]
+		var b: Array = circles[k]
+		if (a[0] as Vector2).distance_to(b[0]) + float(b[1]) > float(a[1]) + 0.01:
+			nested = false
+	var lost := hp0 - p.health
+	print("[auto] zone check: phases=%d nested=%s finished=%s player_lost=%.1f" % [
+		circles.size(), nested, zone.state == ZoneManager.State.FINISHED, lost])
+	if not ok or circles.size() != ZoneManager.PHASES.size() or not nested or zone.state != ZoneManager.State.FINISHED or lost < 5.0:
+		_checks_failed.append("zone phases / damage")
+	for c in Game.match_manager.alive:
+		c.health = c.max_health
+	zone.start(777, 1.0)
 
 
 ## Armor absorbs damage and wears out; heals / boosts follow their rules.
@@ -519,6 +569,60 @@ func _finish() -> void:
 	ok = ok and _checks_failed.is_empty()
 	print("[auto] AUTOTEST ", "PASSED" if ok else "FAILED")
 	get_tree().quit(0 if ok else 1)
+
+
+# --------------------------------------------------------------------------
+# Bots-only match simulation
+# --------------------------------------------------------------------------
+
+func _run_matchsim(delta: float) -> void:
+	var p := Game.player
+	var mm := Game.match_manager
+	if not _sim_started:
+		_sim_started = true
+		var ctrl := p.get_node("PlayerController")
+		ctrl.set_process(false)
+		ctrl.set_process_unhandled_input(false)
+		p.max_health = 1.0e12
+		p.health = 1.0e12
+		# Parked high above the sea in a corner: nobody sees or reaches it.
+		p.global_position = Vector3(990.0, 300.0, 990.0)
+		p.set_physics_process(false)
+		Events.character_died.connect(func(v, info):
+			if v == p:
+				return
+			var i := info as DamageInfo
+			if i != null and i.attacker == null and i.weapon_name != "":
+				_sim.zone_deaths += 1
+			elif i != null and i.attacker != null:
+				_sim.gun_deaths += 1
+			else:
+				_sim.other_deaths += 1)
+	_log_timer -= delta
+	if _log_timer <= 0.0:
+		_log_timer = 10.0
+		var zone := Game.zone
+		var states := {}
+		var outside := 0
+		var armed := 0
+		for c in mm.alive:
+			if c == p:
+				continue
+			var b := c.get_node_or_null("BotBrain") as BotBrain
+			if b != null:
+				states[b.fsm.current_name] = int(states.get(b.fsm.current_name, 0)) + 1
+			if not zone.is_inside(c.global_position):
+				outside += 1
+			if c.is_armed():
+				armed += 1
+		print("[sim] t=%3.0fs alive=%d phase=%d state=%d r=%.0f outside=%d armed=%d deaths(zone=%d gun=%d) states=%s" % [
+			_t, mm.alive.size() - 1, zone.phase, zone.state, zone.radius, outside, armed,
+			_sim.zone_deaths, _sim.gun_deaths, str(states)])
+	if _t > duration or mm.alive.size() <= 2:
+		print("[sim] END t=%.0fs alive_bots=%d zone_deaths=%d gun_deaths=%d other=%d avg_physics=%.2fms" % [
+			_t, mm.alive.size() - 1, _sim.zone_deaths, _sim.gun_deaths, _sim.other_deaths,
+			_cpu_physics / maxf(_cpu_samples, 1) * 1000.0])
+		get_tree().quit()
 
 
 # --------------------------------------------------------------------------
@@ -775,6 +879,30 @@ func _run_screenshots() -> void:
 		await _wait(0.5)
 		await _shot("14_bullet_holes")
 		p.input_aim = false
+
+	# Safe zone wall close to the player, the minimap and the big map.
+	var zone := Game.zone
+	# Frozen "waiting" state so the circle stays where it is put.
+	zone.state = ZoneManager.State.WAITING
+	zone.timer = 999.0
+	var pz := Vector2(p.global_position.x, p.global_position.z)
+	var fwd2 := Vector2(-sin(p.aim_yaw), -cos(p.aim_yaw))
+	zone.center = pz - fwd2 * 40.0
+	zone.radius = 70.0
+	zone.next_center = zone.center + Vector2(10, 5)
+	zone.next_radius = 30.0
+	p.aim_pitch = 0.05
+	await _wait(0.6)
+	await _shot("15a_zone_wall")
+	zone.center = pz - fwd2 * 90.0
+	zone.radius = 70.0
+	await _wait(1.2)
+	await _shot("15b_outside_zone")
+	var hud := main.session.get_node("HUD") as GameHUD
+	hud.world_map.visible = true
+	await _wait(0.3)
+	await _shot("15c_world_map")
+	hud.world_map.visible = false
 
 	# Pause menu.
 	main.session.set_paused(true)

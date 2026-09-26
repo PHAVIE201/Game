@@ -15,3 +15,5 @@ var min_spawn_distance := 70.0
 ## Free-for-all: bots also fight each other (battle royale rules).
 var bots_fight_each_other := true
 var difficulty: int = Difficulty.NORMAL
+## Zone timings multiplier (< 1 = faster matches).
+var zone_time_scale := 1.0

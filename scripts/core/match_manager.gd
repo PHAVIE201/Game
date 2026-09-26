@@ -63,6 +63,8 @@ func start_match(p_config: MatchConfig) -> void:
 		if brain != null:
 			_brains.append(brain)
 
+	if Game.zone != null:
+		Game.zone.start(_rng.randi(), config.zone_time_scale)
 	match_start_msec = Time.get_ticks_msec()
 	state = State.IN_PROGRESS
 	Events.match_started.emit()
@@ -127,6 +129,8 @@ func restart() -> void:
 
 func clear() -> void:
 	state = State.IDLE
+	if Game.zone != null:
+		Game.zone.stop()
 	for c in participants:
 		if is_instance_valid(c):
 			c.queue_free()

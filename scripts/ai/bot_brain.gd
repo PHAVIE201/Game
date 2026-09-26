@@ -38,6 +38,7 @@ var direct_move := Vector3.ZERO
 var _aim_offset := Vector3.ZERO
 var _aim_offset_timer := 0.0
 var _weapon_switch_cooldown := 0.0
+var _zone_check_timer := 0.0
 
 ## Level of detail: bots far from the camera think less often (every 2nd / 4th
 ## physics tick, with the accumulated delta). Their last inputs stay applied in
@@ -69,6 +70,7 @@ func _build_states() -> void:
 	fsm.add(&"wander", WanderState.new())
 	fsm.add(&"investigate", InvestigateState.new())
 	fsm.add(&"combat", CombatState.new())
+	fsm.add(&"zone", ZoneState.new())
 
 
 func _physics_process(delta: float) -> void:
@@ -89,6 +91,7 @@ func _physics_process(delta: float) -> void:
 
 	time += delta
 	perception.update(delta)
+	_check_zone(delta)
 	fsm.update(delta)
 
 	var dir := Vector3.ZERO
@@ -102,6 +105,26 @@ func _physics_process(delta: float) -> void:
 	elif dir.length_squared() > 0.01:
 		_turn_towards_dir(dir, 0.0, delta)
 	_apply_move(dir)
+
+
+## Heads into the safe zone when outside it, or when the next circle closes
+## soon compared with the time needed to walk there.
+func _check_zone(delta: float) -> void:
+	_zone_check_timer -= delta
+	if _zone_check_timer > 0.0:
+		return
+	_zone_check_timer = 1.0 + rng.randf() * 0.5
+	var zone := Game.zone
+	if zone == null or not zone.is_active() or fsm.is_in(&"combat") or fsm.is_in(&"zone"):
+		return
+	var pos := character.global_position
+	var go := not zone.is_inside(pos, 3.0)
+	if not go and not zone.is_inside_next(pos, 8.0):
+		var dist := Vector2(pos.x, pos.z).distance_to(zone.next_center) - zone.next_radius
+		var travel := dist / GameCharacter.RUN_SPEED
+		go = zone.time_until_closed() < travel * 1.3 + profile.zone_margin
+	if go:
+		fsm.change(&"zone")
 
 
 func _compute_lod() -> int:
@@ -225,11 +248,14 @@ func clear_target() -> void:
 	target = null
 
 
-## Random walkable destination, biased toward towns and toward the action.
+## Random walkable destination inside the safe zone, biased toward towns
+## and toward the next circle (where everybody ends up meeting).
 func pick_wander_destination() -> Vector3:
 	var pos := character.global_position
 	if Game.world == null:
 		return pos
+	var zone := Game.zone
+	var zone_on := zone != null and zone.is_active()
 	for attempt in 15:
 		var roll := rng.randf()
 		var p: Vector3
@@ -239,14 +265,14 @@ func pick_wander_destination() -> Vector3:
 			if Vector2(pos.x, pos.z).distance_to(c) > 700.0:
 				continue
 			p = Vector3(c.x + rng.randf_range(-35.0, 35.0), 0.0, c.y + rng.randf_range(-35.0, 35.0))
-		elif roll < 0.5 and Game.player != null and not Game.player.is_dead:
-			# Drift toward the player's area (stand-in for the phase-2 safe zone).
-			var pp := Game.player.global_position
-			p = pp + Vector3(rng.randf_range(-120.0, 120.0), 0.0, rng.randf_range(-120.0, 120.0))
+		elif roll < 0.55 and zone_on:
+			p = zone.random_point_in_next(rng, 0.1)
 		else:
 			var ang := rng.randf() * TAU
 			var r := rng.randf_range(50.0, 180.0)
 			p = pos + Vector3(cos(ang) * r, 0.0, sin(ang) * r)
+		if zone_on and not zone.is_inside(p, 10.0) and attempt < 12:
+			continue
 		if Game.world.is_walkable(p.x, p.z):
 			p.y = Game.world.get_height(p.x, p.z)
 			return p

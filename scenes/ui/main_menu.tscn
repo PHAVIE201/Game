@@ -56,7 +56,7 @@ horizontal_alignment = 1
 [node name="Subtitle" type="Label" parent="Center/Panel/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.9, 0.95, 1)
-text = "Battle royale trên Đảo Mây - Giai đoạn 1: Nền móng"
+text = "Battle royale trên Đảo Mây"
 horizontal_alignment = 1
 
 [node name="Sep" type="HSeparator" parent="Center/Panel/VBox"]
@@ -104,6 +104,14 @@ layout_mode = 2
 text = "Độ khó của bot"
 
 [node name="Difficulty" type="OptionButton" parent="Center/Panel/VBox/Grid"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ZoneLabel" type="Label" parent="Center/Panel/VBox/Grid"]
+layout_mode = 2
+text = "Nhịp thu hẹp bo"
+
+[node name="ZoneSpeed" type="OptionButton" parent="Center/Panel/VBox/Grid"]
 layout_mode = 2
 size_flags_horizontal = 3
 

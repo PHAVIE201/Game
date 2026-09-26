@@ -54,6 +54,7 @@ Renderer: **Forward+** (Vulkan / D3D12 / Metal). Card đồ họa rất cũ khô
 | **X** | Cất súng (tay không, chuột trái để đấm) |
 | **F** | Nhặt món đồ đang nhìn vào (có dòng nhắc ở giữa màn hình) |
 | **Tab** | Mở / đóng túi đồ (nhặt, bỏ, dùng đồ, cầm súng bằng chuột) |
+| **M** | Mở / đóng bản đồ lớn |
 | **H** | Hồi máu nhanh (tự chọn băng gạc / sơ cứu / hộp y tế hợp với lượng máu) |
 | **4 / 5 / 6 / 7 / 8** | Băng gạc / Bộ sơ cứu / Hộp y tế / Nước tăng lực / Thuốc giảm đau (bấm lại để hủy) |
 | **Esc** | Tạm dừng (chỉnh độ nhạy chuột, đồ họa, về menu) |
@@ -171,7 +172,31 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
   (nhanh hơn khi boost cao), trên 60 thì chạy nhanh hơn 6%. Thanh máu có vạch 75 (giới hạn của băng gạc / sơ cứu).
 - HUD: ô Mũ / Giáp / Balo cạnh thanh máu (cấp + độ bền), vòng tiến độ khi đang dùng đồ.
 - Tỉ lệ đồ trong nhà: súng 26, đạn 26, hồi máu 17, mũ 7, giáp 7, tăng lực 7, balo 6. Bot tạm thời xuất phát
-  với giáp / mũ cấp 1–2 ngẫu nhiên (rơi ra khi chết). Bot tạm thời vẫn xuất phát với một
+  với giáp / mũ cấp 1–2 ngẫu nhiên (rơi ra khi chết).
+
+**2.4 Bo thu hẹp, minimap, bản đồ** ✔
+- 7 pha bo. Mỗi pha: vòng tiếp theo (trắng) được công bố, chờ, rồi vòng hiện tại (xanh) thu nhỏ dần về vòng
+  trắng. Vòng mới luôn nằm trọn trong vòng cũ và ưu tiên tâm trên đất liền.
+
+  | Pha | Chờ | Thu hẹp | Bán kính còn lại | Sát thương ngoài bo |
+  |---|---|---|---|---|
+  | 1 | 90 s | 60 s | 600 m | 0.6/s |
+  | 2 | 60 s | 45 s | 360 m | 1/s |
+  | 3 | 50 s | 40 s | 200 m | 2/s |
+  | 4 | 40 s | 30 s | 110 m | 3.5/s |
+  | 5 | 30 s | 25 s | 55 m | 5/s |
+  | 6 | 25 s | 20 s | 25 m | 7/s |
+  | 7 | 20 s | 20 s | 0 m | 10/s |
+- Sát thương bo xuyên giáp, trừ mỗi giây. Kill feed / màn hình chết ghi "gục trong vùng độc".
+- Tường bo: một hình trụ khổng lồ trong suốt màu xanh có sọc chạy (shader `zone_wall.gdshader`), mờ dần lên cao.
+  Đứng ngoài bo thì màn hình ám xanh.
+- Menu chính có tùy chọn **nhịp bo**: bình thường (~9 phút), nhanh (~6 phút), rất nhanh (~3 phút).
+- **Minimap** góc trái dưới (bắc ở trên, khoảng 520 m): địa hình, vòng xanh / trắng, đường chấm tới vùng an
+  toàn khi đang ở ngoài, mũi tên hướng nhìn. Phía trên minimap: pha, thời gian đếm ngược, khoảng cách tới bo.
+- **Bản đồ lớn (M)**: toàn đảo, lưới A–H / 1–8, tên các làng, vòng bo. Ảnh bản đồ vẽ một lần lúc loading
+  (512 × 512, khoảng 0.8 giây).
+- Bot có trạng thái mới **Zone**: tự chạy vào vòng trắng khi đang ngoài bo hoặc khi thời gian còn lại không đủ
+  để đi bộ vào (mỗi bot có độ "cẩn thận" riêng); đi lang thang thì ưu tiên điểm trong bo. Bot tạm thời vẫn xuất phát với một
   súng chính ngẫu nhiên và đạn không giới hạn (bot biết nhặt đồ ở giai đoạn 3); khi chết bot rơi súng và
   vài hộp đạn.
 
@@ -186,6 +211,7 @@ Main (scenes/main)  ── MainMenu, LoadingScreen
      ├─ ProjectileSystem đạn dạng dữ liệu + tracer MultiMesh
      ├─ FxManager        pool hiệu ứng / decal
      ├─ LootManager      đồ nằm đất, luật nhặt / bỏ / rơi đồ khi chết
+     ├─ ZoneManager      bo: các pha, tường bo, sát thương ngoài bo
      ├─ MatchManager     spawn, đếm người sống, thắng/thua, chơi lại
      └─ HUD, InventoryScreen, EndScreen, PauseMenu
 
@@ -202,17 +228,18 @@ sau này (túi đồ, giáp, hồi máu, nhảy dù, lái xe) chỉ cần viết
 scenes/            main/ game/ characters/ ui/        (các scene .tscn)
 scripts/
   autoload/        events, game, settings, sfx
-  core/            game_session, match_manager, match_config, layers, mesh_builder, name_generator
+  core/            game_session, match_manager, match_config, zone_manager, layers, mesh_builder,
+                   name_generator
   world/           game_world, height_map, terrain_builder, settlements, vegetation
   characters/      game_character, character_model, character_hitboxes, player_controller,
                    third_person_camera, inventory
   items/           item_db (danh mục đồ), item_models, loot_manager (đồ nằm đất + luật nhặt/bỏ)
   weapons/         weapon_data (Resource), weapon_db, weapon, projectile_system, weapon_models, damage_info
   ai/              bot_brain, bot_perception, bot_navigator, bot_profile, state_machine, bot_state
-  ai/states/       idle, wander, investigate, combat
+  ai/states/       idle, wander, investigate, combat, zone
   fx/  ui/  debug/ (automation cho test headless)
 resources/         weapons/*.tres (6 súng + tay không), ui/theme.tres
-shaders/           foliage, water, tracer
+shaders/           foliage, water, tracer, zone_wall
 tools/             công cụ kiểm tra headless (xem mục 6)
 ```
 

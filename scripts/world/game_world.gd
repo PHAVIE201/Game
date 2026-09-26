@@ -17,6 +17,9 @@ var settlements: Settlements
 var vegetation: Vegetation
 var is_ready := false
 var generation_time_ms := 0
+## Top-down map (minimap / M map), 4 m per pixel.
+var map_texture: ImageTexture
+const MAP_RES := 512
 ## Milliseconds spent in each generation step (printed + shown with F3).
 var generation_steps: Dictionary = {}
 
@@ -89,8 +92,10 @@ func generate(map_seed: int) -> void:
 		vegetation.build_cells(c, c + batch, view_scale)
 		await _step("Đang trồng cây...", 0.72 + 0.22 * float(c) / cells)
 
-	await _step("Đang đổ nước...", 0.96)
+	await _step("Đang đổ nước...", 0.95)
 	_build_water()
+	await _step("Đang vẽ bản đồ...", 0.97)
+	map_texture = ImageTexture.create_from_image(make_map_image(MAP_RES))
 	await _step("", 1.0)
 
 	generation_time_ms = Time.get_ticks_msec() - t0

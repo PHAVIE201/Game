@@ -20,6 +20,9 @@ const STANCE_NAMES := ["ĐỨNG", "NGỒI", "NẰM"]
 @onready var vignette: TextureRect = $Root/DamageVignette
 @onready var pickup_prompt: Label = $Root/PickupPrompt
 @onready var loot_label: Label = $Root/LootMessage
+@onready var zone_label: Label = $Root/ZoneLabel
+@onready var zone_tint: ColorRect = $Root/ZoneTint
+@onready var world_map: Minimap = $Root/WorldMap
 
 var _msg_time := 0.0
 var _hint_time := 25.0
@@ -28,6 +31,8 @@ var _vignette := 0.0
 var _last_state: Array = []
 var _loot_time := 0.0
 var _prompt_key: Variant = null
+var _zone_timer := 0.0
+var _zone_text := ""
 
 
 func _ready() -> void:
@@ -44,7 +49,10 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_perf"):
+	if event.is_action_pressed("map"):
+		world_map.visible = not world_map.visible
+		Sfx.play_2d(&"ui_click", -10.0)
+	elif event.is_action_pressed("toggle_perf"):
 		Settings.show_fps = not Settings.show_fps
 		Settings.commit()
 		perf_label.visible = Settings.show_fps
@@ -96,6 +104,10 @@ func _process(delta: float) -> void:
 	vignette.modulate.a = maxf(_vignette, low)
 
 	_update_pickup_prompt()
+	_zone_timer -= delta
+	if _zone_timer <= 0.0:
+		_zone_timer = 0.2
+		_update_zone(p)
 	if _loot_time > 0.0:
 		_loot_time -= delta
 		loot_label.modulate.a = clampf(_loot_time / 0.5, 0.0, 1.0)
@@ -134,6 +146,34 @@ func _update_pickup_prompt() -> void:
 		pickup_prompt.text = text
 
 
+func _update_zone(p: GameCharacter) -> void:
+	var zone := Game.zone
+	var text := ""
+	var outside := 0.0
+	if zone != null and zone.is_active():
+		match zone.state:
+			ZoneManager.State.WAITING:
+				text = "Bo thu hẹp sau  %s" % ZoneManager.format_time(zone.timer)
+			ZoneManager.State.SHRINKING:
+				text = "Bo đang thu hẹp  %s" % ZoneManager.format_time(zone.timer)
+			_:
+				text = "Bo cuối"
+		text = "Pha %d/%d   %s" % [mini(zone.phase + 1, zone.get_phase_count()), zone.get_phase_count(), text]
+		if not p.is_dead:
+			outside = zone.distance_outside(p.global_position)
+			if outside > 0.0:
+				text += "\nNGOÀI BO  -  cách vùng an toàn %d m" % ceili(outside)
+			elif zone.state == ZoneManager.State.WAITING and not zone.is_inside_next(p.global_position):
+				var pp := Vector2(p.global_position.x, p.global_position.z)
+				var d := pp.distance_to(zone.next_center) - zone.next_radius
+				text += "\nVùng an toàn tiếp theo cách %d m" % ceili(d)
+	if text != _zone_text:
+		_zone_text = text
+		zone_label.text = text
+		zone_label.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45) if outside > 0.0 else Color.WHITE)
+	zone_tint.color.a = 0.1 + 0.04 * sin(Time.get_ticks_msec() * 0.004) if outside > 0.0 else 0.0
+
+
 func _on_loot_message(text: String) -> void:
 	loot_label.text = text
 	_loot_time = 2.2
@@ -167,6 +207,10 @@ func _on_character_damaged(victim_node: Node, info_ref: RefCounted) -> void:
 			Sfx.play_2d(&"hit_head", -4.0)
 		else:
 			Sfx.play_2d(&"hitmarker", -6.0)
+	elif victim == Game.player and info.attacker == null:
+		# Zone / fall damage: softer feedback, no direction marker.
+		_vignette = minf(_vignette + 0.15, 0.5)
+		Sfx.play_2d(&"hit_body", -10.0)
 	elif victim == Game.player:
 		_vignette = minf(_vignette + 0.25 + info.amount / 100.0, 0.8)
 		Sfx.play_2d(&"hit_body", -2.0)

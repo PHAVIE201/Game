@@ -15,6 +15,7 @@ var config: MatchConfig
 @onready var fx: FxManager = $Fx
 @onready var match_manager: MatchManager = $Match
 @onready var loot: LootManager = $Loot
+@onready var zone: ZoneManager = $Zone
 @onready var hud: CanvasLayer = $HUD
 @onready var end_screen: EndScreen = $EndScreen
 @onready var pause_menu: PauseMenu = $PauseMenu
@@ -28,6 +29,7 @@ func _ready() -> void:
 	Game.fx = fx
 	Game.match_manager = match_manager
 	Game.loot = loot
+	Game.zone = zone
 	Settings.apply_viewport(get_viewport())
 	if config == null:
 		config = MatchConfig.new()

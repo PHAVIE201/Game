@@ -48,6 +48,8 @@ func show_result(r: Dictionary) -> void:
 		if r.killer_name != "":
 			var extra := " (trúng đầu)" if r.headshot else ""
 			subtitle_label.text = "Bị hạ bởi %s bằng %s%s từ %d m" % [r.killer_name, r.weapon, extra, int(r.distance)]
+		elif r.weapon != "":
+			subtitle_label.text = "Bạn đã gục trong %s ngoài vùng an toàn." % String(r.weapon).to_lower()
 		else:
 			subtitle_label.text = "Bạn đã bị loại khỏi trận đấu."
 	place_label.text = "#%d / %d" % [r.placement, r.total]

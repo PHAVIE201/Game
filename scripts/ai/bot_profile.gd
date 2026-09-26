@@ -12,6 +12,8 @@ var burst_min := 3
 var burst_max := 7
 var crouch_chance := 0.35
 var hearing_chance := 0.8
+## Extra seconds of margin before heading into the next safe zone.
+var zone_margin := 30.0
 
 
 static func create(difficulty: int, rng: RandomNumberGenerator) -> BotProfile:
@@ -37,6 +39,7 @@ static func create(difficulty: int, rng: RandomNumberGenerator) -> BotProfile:
 	p.turn_speed *= rng.randf_range(0.85, 1.15)
 	p.view_distance *= rng.randf_range(0.85, 1.1)
 	p.crouch_chance = rng.randf_range(0.15, 0.5)
+	p.zone_margin = rng.randf_range(10.0, 90.0)
 	p.burst_min = rng.randi_range(2, 4)
 	p.burst_max = p.burst_min + rng.randi_range(2, 4)
 	return p
