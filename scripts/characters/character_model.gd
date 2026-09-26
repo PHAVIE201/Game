@@ -49,6 +49,8 @@ var sprinting := false
 var in_air := false
 var swimming := false
 var reload_progress := -1.0   ## 0..1 while reloading, -1 otherwise
+var bolt_progress := -1.0     ## 0..1 while a bolt-action gun cycles, -1 otherwise
+var swap_amount := 0.0        ## 1 = weapon lowered (switching), 0 = ready
 
 ## Model-space transforms of every bone after the last animate().
 var bone_global: Array[Transform3D] = []
@@ -60,8 +62,14 @@ var body_mesh: MeshInstance3D
 var gun: MeshInstance3D
 var flash: MeshInstance3D
 var flash_light: OmniLight3D
+## Primary weapons carried on the back (not in the hands).
+var back_guns: Array[MeshInstance3D] = []
 
 var _gun_model: Dictionary
+## False when the character holds nothing (fists).
+var _armed := true
+var _punch := 0.0
+var _punch_side := 1.0
 var _crouch := 0.0
 var _prone := 0.0
 var _ads := 0.0
@@ -105,18 +113,14 @@ func build(outfit: Dictionary, weapon_model: StringName, use_flash_light: bool) 
 	body_mesh.skeleton = NodePath("..")
 	skeleton.add_child(body_mesh)
 
-	_gun_model = WeaponModels.get_model(weapon_model)
-	muzzle_local = _gun_model.muzzle
 	gun = MeshInstance3D.new()
 	gun.name = "Gun"
-	gun.mesh = _gun_model.mesh
 	gun.layers = Layers.RENDER_CHARACTERS
 	add_child(gun)
 
 	flash = MeshInstance3D.new()
 	flash.name = "MuzzleFlash"
 	flash.mesh = WeaponModels.get_flash_mesh()
-	flash.position = muzzle_local
 	flash.visible = false
 	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	gun.add_child(flash)
@@ -126,11 +130,43 @@ func build(outfit: Dictionary, weapon_model: StringName, use_flash_light: bool) 
 		flash_light.light_energy = 0.0
 		flash_light.omni_range = 7.0
 		flash_light.shadow_enabled = false
-		flash_light.position = muzzle_local + Vector3(0, 0, -0.1)
 		gun.add_child(flash_light)
+	for k in 2:
+		var bg := MeshInstance3D.new()
+		bg.name = "BackGun%d" % k
+		bg.layers = Layers.RENDER_CHARACTERS
+		bg.visible = false
+		# Small detail: not worth drawing (or casting shadows) far away.
+		bg.visibility_range_end = 70.0
+		add_child(bg)
+		back_guns.append(bg)
 
 	bone_global.resize(BONE_COUNT)
+	set_weapon(weapon_model)
 	animate(0.0)
+
+
+## Puts a gun model in the hands (&"none" = bare fists).
+func set_weapon(model_id: StringName) -> void:
+	_armed = model_id != &"none" and model_id != &""
+	_gun_model = WeaponModels.get_model(model_id if _armed else &"rifle")
+	muzzle_local = _gun_model.muzzle
+	gun.mesh = _gun_model.mesh
+	flash.position = muzzle_local
+	if flash_light != null:
+		flash_light.position = muzzle_local + Vector3(0, 0, -0.1)
+	gun.visible = _armed and not _dead
+
+
+## Shows up to two primary guns slung on the back.
+func set_back_weapons(model_ids: Array[StringName]) -> void:
+	for k in back_guns.size():
+		var bg := back_guns[k]
+		if k < model_ids.size() and model_ids[k] != &"none":
+			bg.mesh = WeaponModels.get_model(model_ids[k]).mesh
+			bg.visible = true
+		else:
+			bg.visible = false
 
 
 static func random_outfit(rng: RandomNumberGenerator) -> Dictionary:
@@ -230,8 +266,12 @@ func _build_body_mesh(o: Dictionary) -> ArrayMesh:
 # Events
 # --------------------------------------------------------------------------
 
-## Called when the weapon fires: muzzle flash + gun kick.
+## Called when the weapon fires: muzzle flash + gun kick (or a punch).
 func on_fired() -> void:
+	if not _armed:
+		_punch = 1.0
+		_punch_side = -_punch_side
+		return
 	_kick = 1.0
 	_flash_time = 0.05
 	flash.visible = true
@@ -255,12 +295,14 @@ func play_death(dir_world: Vector3) -> void:
 	_death_axis = Vector3.UP.cross(d.normalized()).normalized()
 	gun.visible = false
 	flash.visible = false
+	for bg in back_guns:
+		bg.visible = false
 
 
 func reset_pose() -> void:
 	_dead = false
 	_death_t = 0.0
-	gun.visible = true
+	gun.visible = _armed
 	_crouch = 0.0
 	_prone = 0.0
 
@@ -288,6 +330,7 @@ func animate(delta: float) -> void:
 	_air = move_toward(_air, 1.0 if in_air else 0.0, k * 8.0)
 	_swim = move_toward(_swim, 1.0 if swimming else 0.0, k * 3.0)
 	_kick = move_toward(_kick, 0.0, k * 12.0)
+	_punch = move_toward(_punch, 0.0, k * 4.5)
 	if _dead:
 		_death_t = minf(_death_t + k * 2.2, 1.0)
 
@@ -353,8 +396,8 @@ func animate(delta: float) -> void:
 	# ---- Gun ------------------------------------------------------------------
 	var aim_basis := Basis(Vector3.RIGHT, pitch)
 	var anchor := g[B.CHEST] * Vector3(0, 0.17, 0)
-	var off_hip := Vector3(0.15, -0.08, -0.1)
-	var off_ads := Vector3(0.12, 0.04, -0.1)
+	var off_hip: Vector3 = _gun_model.hip
+	var off_ads: Vector3 = _gun_model.ads
 	var off := off_hip.lerp(off_ads, _ads)
 	# Slight inward yaw: the barrel points to the aim point, the handguard stays reachable.
 	var gun_basis := aim_basis * Basis(Vector3.UP, 0.08)
@@ -366,11 +409,18 @@ func animate(delta: float) -> void:
 	if reload_progress >= 0.0:
 		var r := sin(clampf(reload_progress, 0.0, 1.0) * PI)
 		gun_basis = gun_basis * Basis(Vector3.FORWARD, 0.5 * r) * Basis(Vector3.RIGHT, -0.25 * r)
-	off = off.lerp(Vector3(0.1, 0.12, -0.2), _prone)
+	if bolt_progress >= 0.0:
+		var bp := sin(clampf(bolt_progress * 1.6, 0.0, 1.0) * PI)
+		gun_basis = gun_basis * Basis(Vector3.FORWARD, -0.25 * bp)
+	if swap_amount > 0.0:
+		# Weapon switch: the gun dips out of view and comes back up.
+		gun_basis = gun_basis * Basis(Vector3.RIGHT, -0.9 * swap_amount)
+		off += Vector3(0.0, -0.2, 0.08) * swap_amount
+	off = off.lerp(_gun_model.prone as Vector3, _prone)
 	off.z += _kick * 0.06
 	gun_transform = Transform3D(gun_basis, anchor + gun_basis * off)
 	gun.transform = gun_transform
-	gun.visible = not _dead and _swim < 0.5
+	gun.visible = _armed and not _dead and _swim < 0.5
 
 	# ---- Arms (two-bone IK to the gun grips) ---------------------------------
 	var chest_b := g[B.CHEST].basis
@@ -378,6 +428,14 @@ func animate(delta: float) -> void:
 	var hand_l := gun_transform * (_gun_model.grip_l as Vector3)
 	if reload_progress >= 0.0:
 		hand_l = _reload_hand_path(reload_progress, hand_l, gun_transform * (_gun_model.mag as Vector3), g[B.HIPS] * Vector3(-0.18, 0.05, -0.12))
+	if bolt_progress >= 0.0 and _gun_model.has("bolt"):
+		# Right hand works the bolt, then returns to the grip.
+		var bp := sin(clampf(bolt_progress * 1.6, 0.0, 1.0) * PI)
+		hand_r = hand_r.lerp(gun_transform * (_gun_model.bolt as Vector3), bp)
+	if not _armed:
+		_unarmed_hands(g, move_amt)
+		hand_l = _fist_l
+		hand_r = _fist_r
 	if _dead or _swim > 0.5:
 		# Relaxed arms.
 		hand_l = g[B.CHEST] * Vector3(-0.3, -0.45, 0.05)
@@ -417,7 +475,43 @@ func animate(delta: float) -> void:
 			q = g[B.LOWER_LEG_L if left else B.LOWER_LEG_R].basis.get_rotation_quaternion()
 		g[ft] = Transform3D(Basis(q), g[ft].origin)
 
+	_update_back_guns(g)
 	_apply_to_skeleton()
+
+
+var _fist_l := Vector3.ZERO
+var _fist_r := Vector3.ZERO
+
+
+## Hand targets without a weapon: arms swing while moving, fists come up in a
+## guard when aiming and shoot forward when punching.
+func _unarmed_hands(g: Array[Transform3D], move_amt: float) -> void:
+	var chest := g[B.CHEST]
+	var swing := sin(_phase) * 0.2 * move_amt * (1.0 - _prone)
+	var relax_l := chest * Vector3(-0.27, -0.4, swing)
+	var relax_r := chest * Vector3(0.27, -0.4, -swing)
+	var guard_l := chest * Vector3(-0.12, 0.2, -0.28)
+	var guard_r := chest * Vector3(0.13, 0.18, -0.26)
+	var guard := maxf(_ads, minf(_punch * 3.0, 1.0)) * (1.0 - _sprint)
+	_fist_l = relax_l.lerp(guard_l, guard)
+	_fist_r = relax_r.lerp(guard_r, guard)
+	if _punch > 0.0:
+		var ext := sin((1.0 - _punch) * PI)
+		if _punch_side > 0.0:
+			_fist_r = _fist_r.lerp(chest * Vector3(0.05, 0.24, -0.58), ext)
+		else:
+			_fist_l = _fist_l.lerp(chest * Vector3(-0.05, 0.25, -0.58), ext)
+
+
+## Guns slung diagonally across the back (barrel up over a shoulder).
+func _update_back_guns(g: Array[Transform3D]) -> void:
+	for k in back_guns.size():
+		var bg := back_guns[k]
+		if not bg.visible:
+			continue
+		var side := -1.0 if k == 0 else 1.0
+		var b := Basis(Vector3.BACK, side * 0.55) * Basis(Vector3.RIGHT, PI * 0.5)
+		bg.transform = g[B.CHEST] * Transform3D(b, Vector3(side * -0.06, -0.12, 0.2 + k * 0.05))
 
 
 ## Left hand path during a reload: grip -> magazine -> belt pouch -> magazine -> grip.

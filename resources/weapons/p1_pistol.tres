@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"p1"
+display_name = "P1 Sparrow"
+category = 5
+ammo_type = &"ammo_smg"
+model = &"pistol"
+shot_sound = &"pistol_shot"
+damage = 30.0
+head_multiplier = 2.0
+torso_multiplier = 1.0
+limb_multiplier = 0.85
+falloff_start = 20.0
+falloff_end = 110.0
+falloff_min_factor = 0.5
+rounds_per_minute = 420.0
+fire_modes = Array[int]([0])
+magazine_size = 15
+reload_time = 1.7
+muzzle_velocity = 360.0
+bullet_gravity = 9.8
+max_range = 320.0
+loudness_radius = 200.0
+spread_hip = 1.4
+spread_ads = 0.6
+spread_move = 1.1
+spread_air = 4.0
+spread_per_shot = 0.4
+spread_max_bloom = 2.2
+spread_recovery = 7.0
+crouch_spread_factor = 0.85
+prone_spread_factor = 0.7
+recoil_vertical = 1.1
+recoil_horizontal = 0.4
+recoil_recovery = 11.0
+ads_fov = 66.0
+ads_move_factor = 0.9
+tracer_color = Color(1, 0.9, 0.55, 1)

@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"d3"
+display_name = "D3 Heron"
+category = 3
+ammo_type = &"ammo_sniper"
+model = &"dmr"
+shot_sound = &"dmr_shot"
+damage = 54.0
+head_multiplier = 2.2
+torso_multiplier = 1.0
+limb_multiplier = 0.8
+falloff_start = 150.0
+falloff_end = 650.0
+falloff_min_factor = 0.8
+rounds_per_minute = 330.0
+fire_modes = Array[int]([0])
+magazine_size = 10
+reload_time = 2.6
+muzzle_velocity = 910.0
+bullet_gravity = 9.8
+max_range = 1100.0
+loudness_radius = 420.0
+spread_hip = 2.6
+spread_ads = 0.12
+spread_move = 2.2
+spread_air = 6.0
+spread_per_shot = 0.35
+spread_max_bloom = 2.4
+spread_recovery = 5.0
+crouch_spread_factor = 0.8
+prone_spread_factor = 0.55
+recoil_vertical = 1.8
+recoil_horizontal = 0.5
+recoil_recovery = 8.0
+ads_fov = 45.0
+ads_move_factor = 0.65
+tracer_color = Color(1, 0.8, 0.35, 1)

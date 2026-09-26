@@ -65,9 +65,13 @@ func _process(delta: float) -> void:
 	if state != _last_state:
 		_last_state = state
 		weapon_label.text = w.data.display_name
+		ammo_label.visible = w.uses_ammo()
 		ammo_label.text = "%d / %d" % [w.ammo, reserve]
-		ammo_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3) if w.ammo <= 5 else Color.WHITE)
-		if mode_key < 0:
+		var ammo_low := w.ammo <= maxi(ceili(w.data.magazine_size / 6.0), 1)
+		ammo_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3) if ammo_low else Color.WHITE)
+		if not w.uses_ammo():
+			mode_label.text = "CHUỘT TRÁI: ĐẤM"
+		elif mode_key < 0:
 			mode_label.text = "ĐANG NẠP ĐẠN..."
 		else:
 			mode_label.text = "TỰ ĐỘNG" if mode_key == WeaponData.FireMode.AUTO else "PHÁT MỘT"

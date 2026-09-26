@@ -5,8 +5,8 @@ PUBG nhưng **toàn bộ tên, hình ảnh và thiết kế đều tự làm**. 
 súng, âm thanh) đều được **sinh bằng code** trong Godot. Không dùng model, texture hay file âm thanh
 bên ngoài.
 
-> Trạng thái: **Giai đoạn 1/4 – Nền móng** (đã xong).
-> Bản đồ: *Đảo Mây* (sinh theo seed) · Súng: *K7 Kestrel* · Engine: Godot **4.7.2 Standard (GDScript)**
+> Trạng thái: **Giai đoạn 1/4 – Nền móng** (xong) · **Giai đoạn 2 – Vòng lặp battle royale** (đang làm, xem mục 3b).
+> Bản đồ: *Đảo Mây* (sinh theo seed) · 6 khẩu súng · Engine: Godot **4.7.2 Standard (GDScript)**
 
 ![Gameplay](docs/screenshots/gameplay.jpg)
 
@@ -49,6 +49,9 @@ Renderer: **Forward+** (Vulkan / D3D12 / Metal). Card đồ họa rất cũ khô
 | **Chuột phải** (giữ) | Ngắm (zoom qua vai, đạn chụm hơn, đi chậm hơn) |
 | **R** | Nạp đạn (bắn khi hết đạn cũng tự nạp) |
 | **B** | Đổi chế độ bắn: tự động / phát một |
+| **1 / 2 / 3** | Cầm súng chính 1 / súng chính 2 / súng lục |
+| **Lăn chuột** | Đổi sang súng kế tiếp / trước đó |
+| **X** | Cất súng (tay không, chuột trái để đấm) |
 | **Esc** | Tạm dừng (chỉnh độ nhạy chuột, đồ họa, về menu) |
 | **F3** | Bật / tắt bảng hiệu năng (FPS, draw call, tam giác, thời gian vật lý) |
 
@@ -113,6 +116,30 @@ Có thể đổi phím trong `Project Settings > Input Map`. Các phím **F** (n
 - Toàn bộ âm thanh được tổng hợp bằng code: tiếng súng (xa thì bị lọc trầm), nạp đạn, trúng đích,
   bước chân, đạn sượt qua.
 
+## 3b. Giai đoạn 2 – Vòng lặp battle royale (đang làm)
+
+Mỗi mục dưới đây được commit riêng khi đã chạy được và qua `tools/check_project.sh`.
+
+**2.1 Nhiều súng và ô vũ khí** ✔
+- 6 khẩu súng (thông số trong `resources/weapons/*.tres`, model sinh bằng code trong `WeaponModels`):
+
+  | Súng | Loại | Đạn | Sát thương | Tốc độ bắn | Băng | Ghi chú |
+  |---|---|---|---|---|---|---|
+  | K7 Kestrel | Súng trường | 5.8 mm | 36 | 660/phút | 30 | tự động / phát một |
+  | V9 Vespa | Tiểu liên | 9 mm | 26 | 860/phút | 32 | bắn từ hông tốt, đạn chậm, giảm sát thương nhanh theo khoảng cách |
+  | B12 Bison | Súng săn (bơm) | 12G | 9 × 19 | 65/phút | 5 | 9 viên chì, nạp từng viên (bóp cò để ngắt nạp) |
+  | D3 Heron | Súng trường bắn tỉa | 7.6 mm | 54 | phát một | 10 | chính xác khi ngắm, giật mạnh |
+  | R8 Raven | Súng bắn tỉa (khóa nòng) | 7.6 mm | 92 (đầu ×2.6) | 45/phút | 5 | kéo khóa nòng sau mỗi phát |
+  | P1 Sparrow | Súng lục | 9 mm | 30 | phát một | 15 | cầm hai tay, rút nhanh |
+- Mỗi nhân vật có **2 ô súng chính + 1 ô súng lục**, và luôn có **tay không** (đấm 14 sát thương, tầm 1.9 m).
+  Đổi súng mất 0.55 giây (súng hạ xuống rồi nâng lên, không bắn được trong lúc đổi). Súng chính không cầm
+  trên tay được đeo chéo sau lưng.
+- Tiếng súng riêng cho từng loại. Tâm ngắm của súng săn là vòng tròn đúng bằng vùng tỏa chì.
+- Bot chọn súng hợp với khoảng cách (súng săn / tiểu liên thì áp sát, bắn tỉa thì giữ khoảng cách, đổi
+  sang súng lục khi địch quá gần), bắn phát một đúng nhịp với súng không tự động.
+- Tạm thời (cho đến khi có loot): người chơi bắt đầu với K7, một súng chính ngẫu nhiên và P1; bot có
+  một súng chính ngẫu nhiên, 50% có thêm súng lục.
+
 ## 4. Kiến trúc
 
 ```
@@ -143,11 +170,11 @@ scripts/
   world/           game_world, height_map, terrain_builder, settlements, vegetation
   characters/      game_character, character_model, character_hitboxes, player_controller,
                    third_person_camera, inventory
-  weapons/         weapon_data (Resource), weapon, projectile_system, weapon_models, damage_info
+  weapons/         weapon_data (Resource), weapon_db, weapon, projectile_system, weapon_models, damage_info
   ai/              bot_brain, bot_perception, bot_navigator, bot_profile, state_machine, bot_state
   ai/states/       idle, wander, investigate, combat
   fx/  ui/  debug/ (automation cho test headless)
-resources/         weapons/k7_rifle.tres, ui/theme.tres
+resources/         weapons/*.tres (6 súng + tay không), ui/theme.tres
 shaders/           foliage, water, tracer
 tools/             công cụ kiểm tra headless (xem mục 6)
 ```

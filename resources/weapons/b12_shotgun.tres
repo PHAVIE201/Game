@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"b12"
+display_name = "B12 Bison"
+category = 2
+ammo_type = &"ammo_shotgun"
+model = &"shotgun"
+shot_sound = &"shotgun_shot"
+damage = 19.0
+head_multiplier = 1.5
+torso_multiplier = 1.0
+limb_multiplier = 0.9
+falloff_start = 8.0
+falloff_end = 55.0
+falloff_min_factor = 0.15
+rounds_per_minute = 65.0
+fire_modes = Array[int]([0])
+magazine_size = 5
+reload_time = 0.55
+reload_per_round = true
+pellets = 9
+pellet_spread = 3.0
+muzzle_velocity = 380.0
+bullet_gravity = 9.8
+max_range = 140.0
+loudness_radius = 300.0
+spread_hip = 0.9
+spread_ads = 0.5
+spread_move = 0.7
+spread_air = 3.0
+spread_per_shot = 0.0
+spread_max_bloom = 0.0
+spread_recovery = 6.0
+crouch_spread_factor = 0.9
+prone_spread_factor = 0.85
+recoil_vertical = 3.4
+recoil_horizontal = 0.8
+recoil_recovery = 14.0
+ads_fov = 62.0
+ads_move_factor = 0.75
+tracer_color = Color(1, 0.75, 0.4, 1)

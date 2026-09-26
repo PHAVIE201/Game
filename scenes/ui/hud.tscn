@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://scripts/ui/compass.gd" id="3_compass"]
 [ext_resource type="Script" path="res://scripts/ui/health_bar.gd" id="4_health"]
 [ext_resource type="Script" path="res://scripts/ui/kill_feed.gd" id="5_feed"]
+[ext_resource type="Script" path="res://scripts/ui/weapon_slots.gd" id="6_slots"]
 
 [sub_resource type="Gradient" id="vig_gradient"]
 offsets = PackedFloat32Array(0.5, 1)
@@ -183,6 +184,22 @@ theme_override_font_sizes/font_size = 16
 text = "TỰ ĐỘNG"
 horizontal_alignment = 2
 
+[node name="WeaponSlots" type="Control" parent="Root"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -290.0
+offset_top = -250.0
+offset_right = -30.0
+offset_bottom = -160.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("6_slots")
+
 [node name="CenterMessage" type="Label" parent="Root"]
 layout_mode = 1
 anchors_preset = 5
@@ -221,5 +238,6 @@ theme_override_colors/font_color = Color(1, 1, 1, 0.85)
 theme_override_font_sizes/font_size = 15
 text = "WASD: di chuyển   Shift: chạy nhanh   Ctrl: đi bộ   Space: nhảy
 C: ngồi   Z: nằm   Chuột trái: bắn   Chuột phải (giữ): ngắm
-R: nạp đạn   B: đổi chế độ bắn   Esc: tạm dừng   F3: hiệu năng"
+R: nạp đạn   B: đổi chế độ bắn   1/2/3, lăn chuột: đổi súng   X: cất súng
+Esc: tạm dừng   F3: hiệu năng"
 vertical_alignment = 2

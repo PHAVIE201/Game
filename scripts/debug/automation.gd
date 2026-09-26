@@ -38,6 +38,9 @@ var _log_timer := 0.0
 var _screens_started := false
 var _duel_distances: Array[float] = [15.0, 40.0, 80.0, 150.0]
 var _duel_started := false
+## 0 = not run, 1 = running, 2 = done
+var _weapon_check_state := 0
+var _checks_failed: Array[String] = []
 
 
 func _ready() -> void:
@@ -96,7 +99,9 @@ func _session_ready() -> bool:
 func _process(delta: float) -> void:
 	if not _session_ready():
 		return
-	_t += delta
+	# The scripted weapon check does not count toward the test timeline.
+	if _weapon_check_state != 1:
+		_t += delta
 	if delta > 0.0:
 		_fps_samples.append(1.0 / delta)
 	_cpu_physics += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
@@ -124,6 +129,11 @@ func _run_autotest(delta: float) -> void:
 		_log_status()
 	match _phase:
 		0:
+			if _weapon_check_state == 0:
+				_weapon_check_state = 1
+				_weapon_check()
+			if _weapon_check_state == 1:
+				return
 			_autopilot(delta)
 			_swim_test()
 			if _t > duration * 0.4:
@@ -180,6 +190,92 @@ func _run_autotest(delta: float) -> void:
 				_finish()
 
 
+## Every gun (and the fists) must hit a dummy target placed in front of the player.
+func _weapon_check() -> void:
+	var p := Game.player
+	var ctrl := p.get_node_or_null("PlayerController")
+	if ctrl != null:
+		ctrl.set_process(false)
+		ctrl.set_process_unhandled_input(false)
+	var dummy: GameCharacter = null
+	for c in Game.match_manager.alive:
+		if not c.is_player:
+			dummy = c
+			break
+	var dummy_brain := dummy.get_node("BotBrain") as BotBrain
+	dummy_brain.set_physics_process(false)
+	dummy.input_fire = false
+	dummy.input_move = Vector2.ZERO
+	dummy.max_health = 1.0e9
+	dummy.health = 1.0e9
+	p.max_health = 1.0e9
+	p.health = 1.0e9
+	var hits := {"n": 0, "dmg": 0.0}
+	var on_dmg := func(v, info):
+		if v == dummy and (info as DamageInfo).attacker == p:
+			hits.n += 1
+			hits.dmg += (info as DamageInfo).amount
+	Events.character_damaged.connect(on_dmg)
+	var report := []
+	var guns: Array[WeaponData] = []
+	guns.append_array(WeaponDB.GUNS)
+	guns.append(WeaponDB.FISTS)
+	for data in guns:
+		var dist := 1.3 if data.is_melee() else 8.0
+		if data.is_melee():
+			p.holster()
+		else:
+			p.give_weapon(data)
+			p.inventory.add_ammo(data.ammo_type, data.magazine_size * 2)
+		await _wait(GameCharacter.SWAP_TIME + 0.15)
+		var fwd := Vector3(-sin(p.aim_yaw), 0.0, -cos(p.aim_yaw))
+		var pos := p.global_position + fwd * dist
+		dummy.global_position = Vector3(pos.x, Game.world.get_height(pos.x, pos.z) + 0.1, pos.z)
+		dummy.velocity = Vector3.ZERO
+		p.input_move = Vector2.ZERO
+		await _wait(0.3)
+		hits.n = 0
+		hits.dmg = 0.0
+		for shot in 2:
+			var to := dummy.get_hitbox_center() - p.get_eye_position()
+			p.aim_yaw = atan2(-to.x, -to.z)
+			p.aim_pitch = atan2(to.y, Vector2(to.x, to.z).length())
+			p.aim_point = dummy.get_hitbox_center()
+			p.has_aim_point = true
+			p.input_aim = not data.is_melee()
+			p.input_fire = true
+			await _wait(0.12)
+			p.input_fire = false
+			await _wait(maxf(data.get_fire_interval(), 0.1) + 0.05)
+		await _wait(0.2)
+		report.append("%s=%d(%.0f)" % [data.id, hits.n, hits.dmg])
+		if hits.n == 0:
+			_checks_failed.append("weapon %s never hit the target" % data.id)
+	# Switching + shotgun shell-by-shell reload.
+	p.give_weapon(WeaponDB.B12)
+	await _wait(GameCharacter.SWAP_TIME + 0.1)
+	p.weapon.ammo = 1
+	p.request_reload()
+	await _wait(WeaponDB.B12.reload_time * 2.5)
+	if p.weapon.ammo < 3:
+		_checks_failed.append("shotgun per-round reload: ammo=%d" % p.weapon.ammo)
+	p.equip_slot(GameCharacter.SLOT_PISTOL)
+	await _wait(0.1)
+	if p.weapon_data != WeaponDB.P1:
+		_checks_failed.append("switch to pistol failed")
+	p.cycle_weapon(1)
+	await _wait(GameCharacter.SWAP_TIME + 0.1)
+	print("[auto] weapon check: ", " ".join(report), " active=", p.weapon_data.id)
+	Events.character_damaged.disconnect(on_dmg)
+	p.input_aim = false
+	p.max_health = 100.0
+	p.health = 100.0
+	dummy.max_health = 100.0
+	dummy.health = 100.0
+	dummy_brain.set_physics_process(true)
+	_weapon_check_state = 2
+
+
 ## Drops the player into deep water for a few seconds to exercise swimming.
 func _swim_test() -> void:
 	var p := Game.player
@@ -228,6 +324,8 @@ func _autopilot(delta: float) -> void:
 			p.request_reload()
 		elif r < 0.33:
 			p.cycle_fire_mode()
+		elif r < 0.4:
+			p.cycle_weapon(1)
 	# Shoot at the nearest visible enemy.
 	var best: GameCharacter = null
 	var best_d := 160.0
@@ -289,7 +387,10 @@ func _finish() -> void:
 	for r in _stats.results:
 		print("[auto] result: won=%s place=%d/%d kills=%d killer=%s" % [r.won, r.placement, r.total, r.kills, r.killer_name])
 	var ok: bool = _stats.results.size() >= 2 and not _stats.results[0].won and _stats.results[_stats.results.size() - 1].won
-	print("[auto] AUTOTEST ", "PASSED" if ok else "FAILED (missing defeat/victory results)")
+	for f in _checks_failed:
+		print("[auto] CHECK FAILED: ", f)
+	ok = ok and _checks_failed.is_empty()
+	print("[auto] AUTOTEST ", "PASSED" if ok else "FAILED")
 	get_tree().quit(0 if ok else 1)
 
 

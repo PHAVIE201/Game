@@ -42,14 +42,14 @@ func _ready() -> void:
 	camera.current = true
 	_ray.collision_mask = Layers.WORLD
 	Game.camera = camera
-	if target.weapon != null:
-		target.weapon.fired.connect(_on_fired)
-	else:
-		target.ready.connect(func(): target.weapon.fired.connect(_on_fired), CONNECT_ONE_SHOT)
+	target.weapon_fired.connect(_on_fired)
 
 
 func _on_fired() -> void:
-	_shake = minf(_shake + 0.35, 1.0)
+	var kick := 0.35
+	if target.weapon_data != null:
+		kick = clampf(target.weapon_data.recoil_vertical * 0.45, 0.1, 1.0)
+	_shake = minf(_shake + kick, 1.0)
 
 
 ## Mouse sensitivity is scaled down while zoomed in.

@@ -2,10 +2,13 @@ class_name Weapon
 extends RefCounted
 ## Runtime state of one weapon: ammo, fire rate, reload, spread bloom and recoil.
 ## Owned by a GameCharacter; the same code runs for the player and every bot.
+## The bare fists are a Weapon too (melee, no ammo), so a character always has one.
 
 signal fired
 signal reload_started(duration: float)
 signal reload_finished
+## Shotgun: one shell was inserted (the reload continues).
+signal round_loaded
 signal dry_fired
 signal fire_mode_changed(mode: int)
 
@@ -25,12 +28,17 @@ var _since_shot := 10.0
 var _rng := RandomNumberGenerator.new()
 
 
-func _init(p_data: WeaponData) -> void:
+## `mag_ammo` < 0 means a full magazine.
+func _init(p_data: WeaponData, mag_ammo := -1) -> void:
 	data = p_data
-	ammo = data.magazine_size
+	ammo = data.magazine_size if mag_ammo < 0 else mini(mag_ammo, data.magazine_size)
 	if not data.fire_modes.is_empty():
 		fire_mode = data.fire_modes[0]
 	_rng.randomize()
+
+
+func uses_ammo() -> bool:
+	return data.magazine_size > 0
 
 
 func is_reloading() -> bool:
@@ -43,8 +51,22 @@ func get_reload_progress() -> float:
 	return 1.0 - _reload_left / maxf(data.reload_time, 0.01)
 
 
+## Seconds since the last shot.
+func time_since_shot() -> float:
+	return _since_shot
+
+
+## 0..1 while a bolt-action gun cycles its bolt after a shot, -1 otherwise.
+func get_bolt_progress() -> float:
+	if not data.bolt_action or ammo <= 0:
+		return -1.0
+	var t := _since_shot / maxf(data.get_fire_interval(), 0.01)
+	return t if t < 1.0 else -1.0
+
+
 func can_reload(inventory: Inventory) -> bool:
-	return not is_reloading() and ammo < data.magazine_size and inventory.get_ammo(data.ammo_type) > 0
+	return uses_ammo() and not is_reloading() and ammo < data.magazine_size \
+		and inventory.get_ammo(data.ammo_type) > 0
 
 
 func start_reload(inventory: Inventory) -> bool:
@@ -71,24 +93,27 @@ func cycle_fire_mode() -> void:
 func update(delta: float, trigger_down: bool, can_fire: bool, inventory: Inventory) -> int:
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_since_shot += delta
+	var just_pressed := trigger_down and not _trigger_prev
 	if _reload_left > 0.0:
-		_reload_left -= delta
-		if _reload_left <= 0.0:
+		if data.reload_per_round and just_pressed and ammo > 0 and can_fire:
+			# Shotgun: pulling the trigger stops loading shells.
 			_reload_left = 0.0
-			var got := inventory.take_ammo(data.ammo_type, data.magazine_size - ammo)
-			ammo += got
 			reload_finished.emit()
+		else:
+			_reload_left -= delta
+			if _reload_left <= 0.0:
+				_finish_reload(inventory)
 
 	var shots := 0
-	var just_pressed := trigger_down and not _trigger_prev
 	if can_fire and trigger_down and not is_reloading():
 		if fire_mode == WeaponData.FireMode.AUTO or just_pressed:
 			if _cooldown <= 0.0:
-				if ammo <= 0:
+				if uses_ammo() and ammo <= 0:
 					if just_pressed:
 						dry_fired.emit()
 				else:
-					ammo -= 1
+					if uses_ammo():
+						ammo -= 1
 					shots = 1
 					_cooldown = data.get_fire_interval()
 					_since_shot = 0.0
@@ -102,6 +127,19 @@ func update(delta: float, trigger_down: bool, can_fire: bool, inventory: Invento
 		recoil_pitch = move_toward(recoil_pitch, 0.0, data.recoil_recovery * delta)
 		recoil_yaw = move_toward(recoil_yaw, 0.0, data.recoil_recovery * delta)
 	return shots
+
+
+func _finish_reload(inventory: Inventory) -> void:
+	_reload_left = 0.0
+	if data.reload_per_round:
+		ammo += inventory.take_ammo(data.ammo_type, 1)
+		if ammo < data.magazine_size and inventory.get_ammo(data.ammo_type) > 0:
+			_reload_left = data.reload_time
+			round_loaded.emit()
+			return
+	else:
+		ammo += inventory.take_ammo(data.ammo_type, data.magazine_size - ammo)
+	reload_finished.emit()
 
 
 ## Adds recoil for one shot. `factor` < 1 when crouched / prone / aiming.

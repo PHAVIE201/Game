@@ -17,14 +17,19 @@ const KEYS := {
 	"fire_mode": [KEY_B],
 	"pause": [KEY_ESCAPE],
 	"toggle_perf": [KEY_F3],
-	# Reserved for later phases:
 	"interact": [KEY_F],
 	"inventory": [KEY_TAB],
 	"map": [KEY_M],
+	"weapon_1": [KEY_1],
+	"weapon_2": [KEY_2],
+	"weapon_3": [KEY_3],
+	"holster": [KEY_X],
 }
 const MOUSE := {
 	"fire": MOUSE_BUTTON_LEFT,
 	"aim": MOUSE_BUTTON_RIGHT,
+	"weapon_next": MOUSE_BUTTON_WHEEL_DOWN,
+	"weapon_prev": MOUSE_BUTTON_WHEEL_UP,
 }
 
 

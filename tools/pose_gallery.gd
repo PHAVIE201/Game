@@ -6,7 +6,8 @@ extends Node3D
 const TILE := Vector2i(400, 450)
 const COLS := 5
 
-## [label, speed (m/s, forward), strafe (m/s, right), crouch, prone, aim, sprint, air, swim, reload, dead]
+## [label, speed (m/s, forward), strafe (m/s, right), crouch, prone, aim, sprint, air, swim, reload, dead, extras]
+## extras (optional): { gun: model id, back: [model ids], bolt: 0..1, swap: 0..1 }
 const POSES := [
 	["dung yen", 0.0, 0.0, 0, 0, false, false, false, false, -1.0, false],
 	["di bo", 1.9, 0.0, 0, 0, false, false, false, false, -1.0, false],
@@ -23,6 +24,20 @@ const POSES := [
 	["nhay", 3.0, 0.0, 0, 0, false, false, true, false, -1.0, false],
 	["boi", 2.0, 0.0, 0, 0, false, false, false, true, -1.0, false],
 	["chet", 0.0, 0.0, 0, 0, false, false, false, false, -1.0, true],
+	["tieu lien", 0.0, 0.0, 0, 0, true, false, false, false, -1.0, false, {"gun": &"smg"}],
+	["sung san", 0.0, 0.0, 0, 0, false, false, false, false, -1.0, false, {"gun": &"shotgun"}],
+	["sung san nap", 0.0, 0.0, 0, 0, false, false, false, false, 0.3, false, {"gun": &"shotgun"}],
+	["DMR ngam", 0.0, 0.0, 0, 0, true, false, false, false, -1.0, false, {"gun": &"dmr"}],
+	["ban tia", 0.0, 0.0, 0, 0, true, false, false, false, -1.0, false, {"gun": &"sniper"}],
+	["keo khoa", 0.0, 0.0, 0, 0, true, false, false, false, -1.0, false, {"gun": &"sniper", "bolt": 0.3}],
+	["ban tia nam", 0.0, 0.0, 0, 1, true, false, false, false, -1.0, false, {"gun": &"sniper"}],
+	["sung luc", 0.0, 0.0, 0, 0, false, false, false, false, -1.0, false, {"gun": &"pistol", "back": [&"rifle", &"sniper"]}],
+	["sung luc ngam", 0.0, 0.0, 0, 0, true, false, false, false, -1.0, false, {"gun": &"pistol"}],
+	["sung luc chay", 4.8, 0.0, 0, 0, false, false, false, false, -1.0, false, {"gun": &"pistol"}],
+	["tay khong", 1.9, 0.0, 0, 0, false, false, false, false, -1.0, false, {"gun": &"none", "back": [&"smg"]}],
+	["tay khong thu", 0.0, 0.0, 0, 0, true, false, false, false, -1.0, false, {"gun": &"none"}],
+	["chay tay khong", 6.4, 0.0, 0, 0, false, true, false, false, -1.0, false, {"gun": &"none", "back": [&"shotgun", &"dmr"]}],
+	["doi sung", 0.0, 0.0, 0, 0, false, false, false, false, -1.0, false, {"gun": &"rifle", "swap": 0.6}],
 ]
 
 var _cam: Camera3D
@@ -58,7 +73,15 @@ func _ready() -> void:
 		var pose: Array = POSES[k]
 		var model := CharacterModel.new()
 		add_child(model)
-		model.build(CharacterModel.player_outfit(), &"rifle", false)
+		var extras: Dictionary = pose[11] if pose.size() > 11 else {}
+		model.build(CharacterModel.player_outfit(), extras.get("gun", &"rifle"), false)
+		if extras.has("back"):
+			var back: Array[StringName] = []
+			for b in extras.back:
+				back.append(b)
+			model.set_back_weapons(back)
+		model.bolt_progress = extras.get("bolt", -1.0)
+		model.swap_amount = extras.get("swap", 0.0)
 		model.velocity_world = Vector3(float(pose[2]), 0, -float(pose[1]))
 		model.crouch_target = float(pose[3])
 		model.prone_target = float(pose[4])

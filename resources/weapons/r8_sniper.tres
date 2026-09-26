@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"r8"
+display_name = "R8 Raven"
+category = 4
+ammo_type = &"ammo_sniper"
+model = &"sniper"
+shot_sound = &"sniper_shot"
+damage = 92.0
+head_multiplier = 2.6
+torso_multiplier = 1.0
+limb_multiplier = 0.85
+falloff_start = 200.0
+falloff_end = 800.0
+falloff_min_factor = 0.85
+rounds_per_minute = 45.0
+fire_modes = Array[int]([0])
+magazine_size = 5
+reload_time = 3.6
+bolt_action = true
+muzzle_velocity = 800.0
+bullet_gravity = 9.8
+max_range = 1300.0
+loudness_radius = 520.0
+spread_hip = 3.6
+spread_ads = 0.03
+spread_move = 3.0
+spread_air = 7.0
+spread_per_shot = 0.0
+spread_max_bloom = 0.0
+spread_recovery = 6.0
+crouch_spread_factor = 0.8
+prone_spread_factor = 0.5
+recoil_vertical = 3.2
+recoil_horizontal = 0.6
+recoil_recovery = 9.0
+ads_fov = 40.0
+ads_move_factor = 0.6
+tracer_color = Color(1, 0.85, 0.45, 1)

@@ -36,6 +36,8 @@ func _process(delta: float) -> void:
 		elif p.stance == GameCharacter.Stance.PRONE:
 			stance_factor = p.weapon_data.prone_spread_factor
 		var spread_deg := p.weapon.get_spread(p.input_aim, hspeed, not p.is_on_floor(), stance_factor)
+		# Shotgun: show the pellet cone.
+		spread_deg += p.weapon_data.pellet_spread
 		var half_h := get_viewport_rect().size.y * 0.5
 		var px := tan(deg_to_rad(spread_deg)) / tan(deg_to_rad(Game.camera.fov) * 0.5) * half_h
 		_gap = lerpf(_gap, clampf(px, 3.0, 120.0), 1.0 - exp(-18.0 * delta))
@@ -51,7 +53,16 @@ func _draw() -> void:
 	if p == null or not is_instance_valid(p) or p.is_dead:
 		return
 	var c := Vector2.ZERO
-	if not p.is_sprinting and not p.is_swimming:
+	if p.weapon_data.is_melee():
+		draw_circle(c, 3.0, OUTLINE)
+		draw_circle(c, 2.0, COLOR)
+	elif p.weapon_data.pellets > 1 and not p.is_sprinting and not p.is_swimming:
+		# Shotgun: circle showing where the pellets land.
+		draw_arc(c, _gap, 0.0, TAU, 32, OUTLINE, 4.0)
+		draw_arc(c, _gap, 0.0, TAU, 32, COLOR, 2.0)
+		draw_circle(c, 2.2, OUTLINE)
+		draw_circle(c, 1.4, COLOR)
+	elif not p.is_sprinting and not p.is_swimming:
 		var length := 9.0 if not p.input_aim else 6.0
 		for dir in [Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP]:
 			var a: Vector2 = c + dir * _gap

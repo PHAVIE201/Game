@@ -2,17 +2,22 @@ class_name WeaponData
 extends Resource
 ## Data-driven weapon definition (one .tres per gun in resources/weapons/).
 ##
-## Phase 2 will add more guns (SMG, sniper, shotgun...) and attachments (scopes)
-## simply by creating new resources / modifiers; the runtime Weapon class and
-## the ProjectileSystem read everything from here.
+## Every gun of the game (and the bare fists) is one of these resources; the
+## runtime Weapon class, the ProjectileSystem, the character model and the bots
+## read everything from here. Register new guns in WeaponDB.
 
 enum FireMode { SINGLE, AUTO }
+enum Category { RIFLE, SMG, SHOTGUN, DMR, SNIPER, PISTOL, MELEE }
 
 @export var id: StringName = &"k7"
 @export var display_name := "K7 Kestrel"
+@export var category: Category = Category.RIFLE
+## Inventory ammo id ("" = no ammo, e.g. fists).
 @export var ammo_type: StringName = &"ammo_rifle"
 ## Procedural model used by WeaponModels.
 @export var model: StringName = &"rifle"
+## Sound played when firing (see Sfx).
+@export var shot_sound: StringName = &"rifle_shot"
 
 @export_group("Damage")
 @export var damage := 36.0
@@ -30,6 +35,17 @@ enum FireMode { SINGLE, AUTO }
 @export var fire_modes: Array[int] = [FireMode.AUTO, FireMode.SINGLE]
 @export var magazine_size := 30
 @export var reload_time := 2.3
+## Reload one round at a time (shotgun): reload_time is then per round and
+## pulling the trigger interrupts the reload.
+@export var reload_per_round := false
+## Bolt action: the bolt is cycled after every shot (sound + animation).
+@export var bolt_action := false
+## Bullets per shot (shotgun pellets). Each pellet deals `damage`.
+@export var pellets := 1
+## Extra cone (degrees) the pellets are spread over.
+@export var pellet_spread := 0.0
+## Fists: reach of a punch in meters (0 = shoots bullets).
+@export var melee_range := 0.0
 @export var muzzle_velocity := 850.0
 @export var bullet_gravity := 9.8
 @export var max_range := 900.0
@@ -57,6 +73,23 @@ enum FireMode { SINGLE, AUTO }
 @export var ads_fov := 55.0
 @export var ads_move_factor := 0.7
 @export var tracer_color := Color(1.0, 0.8, 0.35)
+
+
+func is_melee() -> bool:
+	return category == Category.MELEE
+
+
+func is_pistol() -> bool:
+	return category == Category.PISTOL
+
+
+func is_primary() -> bool:
+	return category != Category.PISTOL and category != Category.MELEE
+
+
+## True when the trigger must be released between shots in every mode.
+func is_single_only() -> bool:
+	return not fire_modes.has(FireMode.AUTO)
 
 
 func get_fire_interval() -> float:

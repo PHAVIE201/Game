@@ -46,7 +46,9 @@ func update(delta: float) -> void:
 	var aim_pt := brain.get_aim_point(delta)
 	brain.look_at_point(aim_pt)
 	var dist := c.global_position.distance_to(t.global_position)
-	c.input_aim = visible and dist > 12.0 and _tactic != Tactic.APPROACH
+	brain.select_weapon_for(dist, delta)
+	var data := c.weapon_data
+	c.input_aim = visible and dist > 12.0 and (_tactic != Tactic.APPROACH or data.category == WeaponData.Category.SNIPER)
 
 	# ---- Shooting -------------------------------------------------------------
 	var reacted := brain.time - brain.target_first_seen_time > brain.profile.reaction_time + dist * 0.002
@@ -54,27 +56,29 @@ func update(delta: float) -> void:
 	var tolerance := 0.02 + 0.6 / maxf(dist, 1.0)
 	var aligned := brain.aim_error_to(aim_pt) < tolerance
 	var fire := false
-	if c.weapon.ammo == 0 and not c.weapon.is_reloading():
+	var single := data.is_single_only()
+	if c.weapon.uses_ammo() and c.weapon.ammo == 0 and not c.weapon.is_reloading():
 		c.request_reload()
-	elif visible and reacted and aligned and not c.weapon.is_reloading():
+	elif visible and reacted and aligned and not c.weapon.is_reloading() and not c.is_switching_weapon():
 		if _pause > 0.0:
 			_pause -= delta
 		else:
 			fire = true
-			if c.weapon.fire_mode != WeaponData.FireMode.AUTO:
+			if not single and c.weapon.fire_mode != WeaponData.FireMode.AUTO:
 				c.cycle_fire_mode()
 	else:
 		_pause = maxf(_pause - delta, 0.0)
-	# Burst control: count shots through the ammo counter.
+	# Burst control: count shots through the ammo counter. Single-shot guns
+	# fire "bursts" of one and release the trigger between shots.
 	if fire:
 		if _burst_left <= 0:
 			_burst_left = brain.rng.randi_range(brain.profile.burst_min, brain.profile.burst_max)
-			if dist > 120.0:
-				_burst_left = brain.rng.randi_range(1, 2)
+			if dist > 120.0 or single:
+				_burst_left = 1 if single else brain.rng.randi_range(1, 2)
 			_burst_start_ammo = c.weapon.ammo
 		if _burst_start_ammo - c.weapon.ammo >= _burst_left:
 			_burst_left = 0
-			_pause = brain.rng.randf_range(0.25, 0.7) + dist * 0.003
+			_pause = _pause_after_burst(data, dist)
 			fire = false
 	c.input_fire = fire
 
@@ -94,8 +98,9 @@ func update(delta: float) -> void:
 			brain.move_mode = BotBrain.MoveMode.RUN
 			brain.direct_move = side
 		Tactic.APPROACH:
+			var close := clampf(brain.preferred_range().y * 0.5, 2.0, 8.0)
 			if not brain.nav.active or brain.nav.destination.distance_to(brain.target_last_seen_pos) > 5.0:
-				brain.move_to(brain.target_last_seen_pos, BotBrain.MoveMode.RUN, 8.0)
+				brain.move_to(brain.target_last_seen_pos, BotBrain.MoveMode.RUN, close)
 		Tactic.RETREAT:
 			brain.nav.stop()
 			brain.move_mode = BotBrain.MoveMode.RUN
@@ -103,16 +108,32 @@ func update(delta: float) -> void:
 
 
 
+func _pause_after_burst(data: WeaponData, dist: float) -> float:
+	var rng := brain.rng
+	match data.category:
+		WeaponData.Category.SNIPER:
+			return rng.randf_range(0.3, 0.8)
+		WeaponData.Category.DMR:
+			return rng.randf_range(0.25, 0.6) + dist * 0.002
+		WeaponData.Category.SHOTGUN, WeaponData.Category.PISTOL:
+			return rng.randf_range(0.12, 0.35)
+		_:
+			return rng.randf_range(0.25, 0.7) + dist * 0.003
+
+
 func _choose_tactic(dist: float, visible: bool) -> void:
 	var c := get_character()
 	var rng := brain.rng
+	var pref := brain.preferred_range()
 	_tactic_timer = rng.randf_range(0.9, 2.4)
 	_strafe_side = 1.0 if rng.randf() < 0.5 else -1.0
 	if not visible:
 		_tactic = Tactic.APPROACH
-	elif dist > 130.0:
-		_tactic = Tactic.APPROACH if rng.randf() < 0.5 else Tactic.HOLD
-	elif dist < 9.0:
+	elif dist > pref.y:
+		# Out of range: close-range guns must push, others sometimes hold.
+		var push := 0.85 if pref.y < 50.0 else 0.5
+		_tactic = Tactic.APPROACH if rng.randf() < push else Tactic.HOLD
+	elif dist < pref.x:
 		_tactic = Tactic.RETREAT if rng.randf() < 0.5 else Tactic.STRAFE
 	else:
 		_tactic = Tactic.STRAFE if rng.randf() < 0.55 else Tactic.HOLD

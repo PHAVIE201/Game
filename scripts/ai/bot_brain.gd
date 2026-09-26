@@ -37,6 +37,7 @@ var direct_move := Vector3.ZERO
 
 var _aim_offset := Vector3.ZERO
 var _aim_offset_timer := 0.0
+var _weapon_switch_cooldown := 0.0
 
 ## Level of detail: bots far from the camera think less often (every 2nd / 4th
 ## physics tick, with the accumulated delta). Their last inputs stay applied in
@@ -121,6 +122,72 @@ func _idle_inputs() -> void:
 # --------------------------------------------------------------------------
 # Helpers used by states
 # --------------------------------------------------------------------------
+
+## Distance band (m) in which the current weapon works best.
+func preferred_range() -> Vector2:
+	return range_for(character.weapon_data)
+
+
+static func range_for(data: WeaponData) -> Vector2:
+	match data.category:
+		WeaponData.Category.SHOTGUN:
+			return Vector2(0.0, 12.0)
+		WeaponData.Category.SMG:
+			return Vector2(0.0, 40.0)
+		WeaponData.Category.PISTOL:
+			return Vector2(0.0, 28.0)
+		WeaponData.Category.DMR:
+			return Vector2(18.0, 350.0)
+		WeaponData.Category.SNIPER:
+			return Vector2(25.0, 500.0)
+		WeaponData.Category.MELEE:
+			return Vector2(0.0, 1.4)
+		_:
+			return Vector2(9.0, 130.0)
+
+
+## How well a weapon suits a fight at `dist` meters (higher = better).
+func weapon_score(w: Weapon, dist: float) -> float:
+	if w == null:
+		return -1.0
+	var data := w.data
+	if w.uses_ammo() and w.ammo == 0 and character.inventory.get_ammo(data.ammo_type) == 0:
+		return -1.0
+	var r := range_for(data)
+	var score := 1.0
+	if dist < r.x:
+		score -= (r.x - dist) / maxf(r.x, 1.0)
+	elif dist > r.y:
+		score -= minf((dist - r.y) / r.y, 0.9)
+	if data.is_pistol():
+		score -= 0.25
+	return score
+
+
+## Switches to the most suitable carried weapon for a fight at `dist`.
+func select_weapon_for(dist: float, delta: float) -> void:
+	_weapon_switch_cooldown -= delta
+	if _weapon_switch_cooldown > 0.0 or character.weapon.is_reloading() or character.is_switching_weapon():
+		return
+	var best := character.active_slot
+	var best_score := weapon_score(character.weapon, dist) + 0.15   # prefer keeping
+	if character.active_slot < 0:
+		best_score = 0.05
+	for k in GameCharacter.SLOT_COUNT:
+		var sc := weapon_score(character.slots[k], dist)
+		if sc > best_score:
+			best_score = sc
+			best = k
+	if best != character.active_slot and best >= 0:
+		character.equip_slot(best)
+		_weapon_switch_cooldown = 2.5
+
+
+## Takes out a gun when walking around with bare fists.
+func ensure_armed() -> void:
+	if character.active_slot < 0 and character.has_any_gun():
+		select_weapon_for(60.0, 1.0)
+
 
 func can_target(c: GameCharacter) -> bool:
 	if c.is_player:

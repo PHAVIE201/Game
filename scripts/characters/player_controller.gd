@@ -43,6 +43,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("fire_mode"):
 		character.cycle_fire_mode()
 		Sfx.play_2d(&"ui_click", -8.0)
+	elif event.is_action_pressed("weapon_1"):
+		character.equip_slot(GameCharacter.SLOT_PRIMARY_1)
+	elif event.is_action_pressed("weapon_2"):
+		character.equip_slot(GameCharacter.SLOT_PRIMARY_2)
+	elif event.is_action_pressed("weapon_3"):
+		character.equip_slot(GameCharacter.SLOT_PISTOL)
+	elif event.is_action_pressed("holster"):
+		character.holster()
+	elif event.is_action_pressed("weapon_next"):
+		character.cycle_weapon(1)
+	elif event.is_action_pressed("weapon_prev"):
+		character.cycle_weapon(-1)
 
 
 func _process(_delta: float) -> void:

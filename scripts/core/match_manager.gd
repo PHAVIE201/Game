@@ -49,12 +49,14 @@ func start_match(p_config: MatchConfig) -> void:
 		player_pos = world.random_land_point(_rng)
 	player = _spawn(PLAYER_SCENE, player_pos, _rng.randf() * TAU, "Bạn")
 	Game.player = player
+	_give_starting_kit(player)
 
 	# Bots around the player (phase 2 replaces this with the plane drop).
 	var used_names := {}
 	for i in config.bot_count:
 		var p := world.find_spawn_point(_rng, player_pos, config.min_spawn_distance, config.spawn_radius)
 		var bot := _spawn(BOT_SCENE, p, _rng.randf() * TAU, NameGenerator.generate(_rng, used_names))
+		_give_starting_kit(bot)
 		var brain := bot.get_node("BotBrain") as BotBrain
 		if brain != null:
 			_brains.append(brain)
@@ -77,6 +79,37 @@ func _spawn(scene: PackedScene, pos: Vector3, yaw: float, display_name: String) 
 	alive.append(c)
 	Events.character_spawned.emit(c)
 	return c
+
+
+## Weapons a character starts with (until looting replaces it).
+func _give_starting_kit(c: GameCharacter) -> void:
+	var primaries: Array[WeaponData] = [WeaponDB.K7, WeaponDB.V9, WeaponDB.B12, WeaponDB.D3, WeaponDB.R8]
+	var weights: Array[float] = [0.32, 0.24, 0.16, 0.15, 0.13]
+	if c.is_player:
+		c.give_weapon(WeaponDB.P1, -1, false)
+		c.give_weapon(primaries[1 + _rng.randi() % (primaries.size() - 1)], -1, false)
+		c.give_weapon(WeaponDB.K7)
+		for w in WeaponDB.GUNS:
+			c.inventory.add_ammo(w.ammo_type, 90 if w.ammo_type != WeaponDB.K7.ammo_type else 210)
+		return
+	var main := primaries[_weighted_pick(weights)]
+	c.give_weapon(main)
+	c.inventory.add_ammo(main.ammo_type, 9999)
+	if _rng.randf() < 0.5:
+		c.give_weapon(WeaponDB.P1, -1, false)
+		c.inventory.add_ammo(WeaponDB.P1.ammo_type, 9999)
+
+
+func _weighted_pick(weights: Array[float]) -> int:
+	var total := 0.0
+	for w in weights:
+		total += w
+	var r := _rng.randf() * total
+	for k in weights.size():
+		r -= weights[k]
+		if r <= 0.0:
+			return k
+	return weights.size() - 1
 
 
 ## Removes every character and starts a new match on the same island.
