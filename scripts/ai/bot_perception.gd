@@ -20,7 +20,8 @@ func update(delta: float) -> void:
 	_timer -= delta
 	if _timer > 0.0:
 		return
-	_timer = INTERVAL + randf() * 0.08
+	# Far away bots (lower LOD) look around less often.
+	_timer = INTERVAL * (1.0 + (brain.lod_every - 1) * 0.35) + randf() * 0.08
 	scan()
 
 

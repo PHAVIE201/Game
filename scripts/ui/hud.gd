@@ -23,6 +23,7 @@ var _msg_time := 0.0
 var _hint_time := 25.0
 var _perf_timer := 0.0
 var _vignette := 0.0
+var _last_state: Array = []
 
 
 func _ready() -> void:
@@ -55,16 +56,23 @@ func _process(delta: float) -> void:
 	if not has_player:
 		return
 
-	# Ammo / weapon
+	# Labels are only touched when their value changes (setting text relayouts).
 	var w := p.weapon
-	weapon_label.text = w.data.display_name
-	ammo_label.text = "%d / %d" % [w.ammo, p.inventory.get_ammo(w.data.ammo_type)]
-	ammo_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3) if w.ammo <= 5 else Color.WHITE)
-	var mode := "TỰ ĐỘNG" if w.fire_mode == WeaponData.FireMode.AUTO else "PHÁT MỘT"
-	mode_label.text = ("ĐANG NẠP ĐẠN..." if w.is_reloading() else mode)
-	stance_label.text = "BƠI" if p.is_swimming else STANCE_NAMES[p.stance]
-
-	kills_label.text = "HẠ GỤC  %d" % p.kills
+	var reserve := p.inventory.get_ammo(w.data.ammo_type)
+	var mode_key := -1 if w.is_reloading() else w.fire_mode
+	var stance_key := 3 if p.is_swimming else p.stance
+	var state := [w.data.display_name, w.ammo, reserve, mode_key, stance_key, p.kills]
+	if state != _last_state:
+		_last_state = state
+		weapon_label.text = w.data.display_name
+		ammo_label.text = "%d / %d" % [w.ammo, reserve]
+		ammo_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3) if w.ammo <= 5 else Color.WHITE)
+		if mode_key < 0:
+			mode_label.text = "ĐANG NẠP ĐẠN..."
+		else:
+			mode_label.text = "TỰ ĐỘNG" if mode_key == WeaponData.FireMode.AUTO else "PHÁT MỘT"
+		stance_label.text = "BƠI" if p.is_swimming else STANCE_NAMES[p.stance]
+		kills_label.text = "HẠ GỤC  %d" % p.kills
 	crosshair.visible = not p.is_dead
 	health_bar.visible = not p.is_dead
 

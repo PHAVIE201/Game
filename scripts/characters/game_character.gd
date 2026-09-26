@@ -70,6 +70,11 @@ var hitboxes: CharacterHitboxes
 var last_attacker: GameCharacter = null
 ## Time of the last shot (bots spot shooting enemies from further away).
 var last_fire_msec := -100000
+## Simulation LOD: bots far from the camera skip move_and_slide() and simply
+## follow the terrain (see _move_simple). Switched automatically.
+var sim_simple := false
+const SIMPLE_ENTER_DIST := 230.0
+const SIMPLE_EXIT_DIST := 200.0
 
 var _jump_requested := false
 var _reload_requested := false
@@ -77,6 +82,8 @@ var _stance_request := -1
 var _collision: CollisionShape3D
 var _capsule: CapsuleShape3D
 var _anim_accum := 0.0
+## Seconds without floor contact (small bumps should not trigger the jump pose).
+var _air_time := 0.0
 var _prev_pos := Vector3.ZERO
 var _curr_pos := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
@@ -235,12 +242,17 @@ func _update_movement(delta: float) -> void:
 		if depth > 0.35:
 			speed *= 0.7
 
-	var on_floor := is_on_floor()
+	var on_floor := is_on_floor() or sim_simple
 	var accel := GROUND_ACCEL if (on_floor or is_swimming) else AIR_ACCEL
 	var target := wish * speed
 	var w := 1.0 - exp(-accel * delta)
 	velocity.x = lerpf(velocity.x, target.x, w)
 	velocity.z = lerpf(velocity.z, target.z, w)
+
+	_update_sim_lod()
+	if sim_simple:
+		_move_simple(delta)
+		return
 
 	if is_swimming:
 		# Float with the chest at the surface.
@@ -257,6 +269,34 @@ func _update_movement(delta: float) -> void:
 		velocity.y -= GRAVITY * delta
 	_jump_requested = false
 	move_and_slide()
+
+
+func _update_sim_lod() -> void:
+	if is_player or Game.world == null or is_swimming:
+		sim_simple = false
+		return
+	var d2 := Game.get_view_position().distance_squared_to(global_position)
+	var limit := SIMPLE_EXIT_DIST if sim_simple else SIMPLE_ENTER_DIST
+	sim_simple = d2 > limit * limit and is_on_floor_or_simple()
+
+
+## Cheap movement for far bots: slide along the terrain surface, blocked only
+## by buildings and deep water (trees / other characters are ignored far away).
+func _move_simple(delta: float) -> void:
+	var next := global_position + Vector3(velocity.x, 0.0, velocity.z) * delta
+	var world := Game.world
+	if world.settlements.is_inside_building(next, 0.35) or world.get_water_depth(next.x, next.z) > 0.9:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		next = global_position
+	next.y = world.get_height(next.x, next.z)
+	velocity.y = 0.0
+	_jump_requested = false
+	global_position = next
+
+
+func is_on_floor_or_simple() -> bool:
+	return sim_simple or is_on_floor()
 
 
 func _update_swimming() -> void:
@@ -326,7 +366,7 @@ func _fire_one() -> void:
 		stance_factor = weapon_data.crouch_spread_factor
 	elif stance == Stance.PRONE:
 		stance_factor = weapon_data.prone_spread_factor
-	var spread := weapon.get_spread(input_aim, hspeed, not is_on_floor(), stance_factor)
+	var spread := weapon.get_spread(input_aim, hspeed, not is_on_floor_or_simple(), stance_factor)
 	dir = _apply_spread(dir, deg_to_rad(spread))
 
 	last_fire_msec = Time.get_ticks_msec()
@@ -406,7 +446,8 @@ func _process(delta: float) -> void:
 	model.aim_pitch = aim_pitch + deg_to_rad(weapon.recoil_pitch)
 	model.aiming = input_aim and not is_sprinting
 	model.sprinting = is_sprinting and Vector2(velocity.x, velocity.z).length() > 3.0
-	model.in_air = not is_on_floor() and not is_swimming and not is_dead
+	_air_time = 0.0 if (is_on_floor_or_simple() or is_swimming) else _air_time + delta
+	model.in_air = _air_time > 0.15 and not is_dead
 	model.swimming = is_swimming
 	model.reload_progress = weapon.get_reload_progress() if weapon.is_reloading() else -1.0
 	model.update_effects(delta)

@@ -61,6 +61,7 @@ func generate(map_seed: int) -> void:
 	add_child(_terrain_root)
 	var total := TerrainBuilder.CHUNKS * TerrainBuilder.CHUNKS
 	for c in total:
+		@warning_ignore("integer_division")
 		terrain.build_chunk(_terrain_root, c % TerrainBuilder.CHUNKS, c / TerrainBuilder.CHUNKS, view_scale)
 		if c % 32 == 31:
 			await _step("Đang dựng địa hình...", 0.3 + 0.3 * float(c) / total)

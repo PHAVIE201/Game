@@ -27,7 +27,6 @@ var _move_timer := 0.0
 var _burst_timer := 0.0
 var _stats := {"shots": 0, "hits": 0, "deaths": 0, "headshots": 0, "results": [], "restarts": 0}
 var _fps_samples: Array[float] = []
-var _cpu_process := 0.0
 var _cpu_physics := 0.0
 var _cpu_samples := 0
 var _swim_state := 0          # 0 = not done, 1 = in water, 2 = done
@@ -35,7 +34,6 @@ var _swim_until := 0.0
 var _swim_return := Vector3.ZERO
 var _pause_state := 0
 var _menu_state := 0
-var _menu_time := 0.0
 var _log_timer := 0.0
 var _screens_started := false
 var _duel_distances: Array[float] = [15.0, 40.0, 80.0, 150.0]
@@ -45,6 +43,14 @@ var _duel_started := false
 func _ready() -> void:
 	main = get_parent()
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# Watchdog: never hang (e.g. if a script failed to compile).
+	var watchdog := Timer.new()
+	watchdog.one_shot = true
+	watchdog.process_mode = Node.PROCESS_MODE_ALWAYS
+	watchdog.timeout.connect(func():
+		print("[auto] WATCHDOG: timed out, FAILED")
+		get_tree().quit(2))
+	add_child(watchdog)
 	_rng.seed = 42
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--autotest"):
@@ -75,6 +81,7 @@ func _ready() -> void:
 	cfg.bot_count = bots
 	cfg.map_seed = map_seed
 	print("[auto] mode=%s bots=%d seed=%d" % [mode, bots, map_seed])
+	watchdog.start(duration + 240.0)
 	main.call_deferred("start_game", cfg)
 
 
@@ -92,7 +99,6 @@ func _process(delta: float) -> void:
 	_t += delta
 	if delta > 0.0:
 		_fps_samples.append(1.0 / delta)
-	_cpu_process += Performance.get_monitor(Performance.TIME_PROCESS)
 	_cpu_physics += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
 	_cpu_samples += 1
 	if mode == "autotest" and _menu_state == 0:
@@ -154,6 +160,7 @@ func _run_autotest(delta: float) -> void:
 				_phase = 2
 		2:
 			if _t > duration * 0.8:
+				print("[auto] end screen visible after death: %s" % s.end_screen.visible)
 				print("[auto] --- restart + force victory ---")
 				s.restart_match()
 				_stats.restarts += 1
@@ -184,7 +191,7 @@ func _swim_test() -> void:
 		if not hm.lakes.is_empty():
 			target = hm.lakes[0].center
 		else:
-			target = hm.river_points[hm.river_points.size() / 2]
+			target = hm.river_points[hm.river_points.size() >> 1]
 		_swim_return = p.global_position
 		p.global_position = Vector3(target.x, 0.2, target.y)
 		p.velocity = Vector3.ZERO
@@ -276,8 +283,9 @@ func _finish() -> void:
 	var avg := _fps_samples.size() / maxf(total_time, 0.0001)
 	print("[auto] shots=%d hits=%d headshots=%d deaths=%d restarts=%d avg_fps(headless)=%.0f" % [
 		_stats.shots, _stats.hits, _stats.headshots, _stats.deaths, _stats.restarts, avg])
-	print("[auto] avg CPU per frame: process=%.2f ms, physics=%.2f ms" % [
-		_cpu_process / maxf(_cpu_samples, 1) * 1000.0, _cpu_physics / maxf(_cpu_samples, 1) * 1000.0])
+	# Physics step = simulation + AI + bullets (the "process" monitor is not
+	# meaningful headless because it includes frame pacing).
+	print("[auto] avg physics step: %.2f ms" % [_cpu_physics / maxf(_cpu_samples, 1) * 1000.0])
 	for r in _stats.results:
 		print("[auto] result: won=%s place=%d/%d kills=%d killer=%s" % [r.won, r.placement, r.total, r.kills, r.killer_name])
 	var ok: bool = _stats.results.size() >= 2 and not _stats.results[0].won and _stats.results[_stats.results.size() - 1].won
@@ -297,15 +305,15 @@ func _run_duels() -> void:
 	p.max_health = 1.0e9
 	p.health = 1.0e9
 	var mm := Game.match_manager
-	var bots: Array[GameCharacter] = []
+	var others: Array[GameCharacter] = []
 	for c in mm.alive:
 		if not c.is_player:
-			bots.append(c)
-	var duelist := bots[0]
+			others.append(c)
+	var duelist := others[0]
 	# Park every other bot far away with its brain disabled.
-	for k in range(1, bots.size()):
-		bots[k].get_node("BotBrain").set_physics_process(false)
-		bots[k].global_position = Vector3(900, 50, 900 - k * 5.0)
+	for k in range(1, others.size()):
+		others[k].get_node("BotBrain").set_physics_process(false)
+		others[k].global_position = Vector3(900, 50, 900 - k * 5.0)
 	var hits := {"n": 0, "head": 0}
 	var on_dmg := func(v, info):
 		if v == p:
@@ -460,6 +468,84 @@ func _run_screenshots() -> void:
 		cam.look_at(Vector3(rq.x, 0.0, rq.y))
 		await _wait(0.5)
 		await _shot("11_river")
+
+	# Running bot seen from the side (walk cycle).
+	if bot != null:
+		bot.request_stance(GameCharacter.Stance.STAND)
+		await _wait(0.8)
+		bot.input_move = Vector2(0, 1)
+		await _wait(1.0)
+		var bfwd := Vector3(-sin(bot.aim_yaw), 0, -cos(bot.aim_yaw))
+		var bright := Vector3(cos(bot.aim_yaw), 0, -sin(bot.aim_yaw))
+		cam.global_position = bot.global_position + bright * 4.0 + bfwd * 1.5 + Vector3(0, 1.3, 0)
+		cam.look_at(bot.global_position + Vector3(0, 0.9, 0))
+		await _shot("12_bot_running")
+		bot.input_move = Vector2.ZERO
+
+	# Back to the player camera: shoot at the nearest building wall.
+	cam.current = false
+	Game.camera = p.get_node("CameraRig/SpringArm3D/Camera3D")
+	(Game.camera as Camera3D).current = true
+	var best_b: Dictionary = {}
+	var best_d := INF
+	for b in world.settlements.buildings:
+		var bc: Vector2 = b.center
+		var d := Vector2(p.global_position.x, p.global_position.z).distance_to(bc)
+		if d < best_d:
+			best_d = d
+			best_b = b
+	if not best_b.is_empty():
+		var bc: Vector2 = best_b.center
+		var wall_target := Vector3(bc.x, float(best_b.floor_y) + 1.6, bc.y)
+		var away := Vector2(p.global_position.x, p.global_position.z) - bc
+		away = away.normalized() * 18.0 if away.length() > 0.1 else Vector2(18, 0)
+		var stand := Vector3(bc.x + away.x, 0, bc.y + away.y)
+		stand.y = world.get_height(stand.x, stand.z) + 0.1
+		p.global_position = stand
+		var to := wall_target - p.get_eye_position()
+		p.aim_yaw = atan2(-to.x, -to.z)
+		p.aim_pitch = atan2(to.y, Vector2(to.x, to.z).length())
+		ctrl.set_process(true)   # crosshair aim point from the camera
+		await _wait(0.8)
+		ctrl.set_process(false)
+		p.input_fire = true
+		await _wait(0.25)
+		await _shot("13_firing_tracers")
+		await _wait(0.5)
+		p.input_fire = false
+		await _wait(0.4)
+		p.input_aim = true
+		await _wait(0.5)
+		await _shot("14_bullet_holes")
+		p.input_aim = false
+
+	# Pause menu.
+	main.session.set_paused(true)
+	await _wait(0.3)
+	await _shot("15_pause_menu")
+	main.session.set_paused(false)
+
+	# Death screen.
+	var info := DamageInfo.new()
+	info.amount = 500.0
+	info.part = DamageInfo.Part.HEAD
+	info.attacker = bot
+	info.weapon_name = "K7 Kestrel"
+	info.direction = Vector3(-sin(p.aim_yaw), 0, -cos(p.aim_yaw))
+	info.distance = 57.0
+	p.apply_damage(info)
+	# Wait for the end screen itself: with a very slow software renderer the
+	# game clock runs slower than real time (Godot caps physics steps per frame).
+	var t_death := Time.get_ticks_msec()
+	while not main.session.end_screen.visible and Time.get_ticks_msec() - t_death < 40000:
+		await get_tree().process_frame
+	await _wait(0.3)
+	await _shot("16_death_screen")
+
+	# Main menu.
+	main.back_to_menu()
+	await _wait(0.5)
+	await _shot("17_main_menu")
 	print("[auto] screenshots done")
 	get_tree().quit()
 

@@ -38,11 +38,18 @@ var direct_move := Vector3.ZERO
 var _aim_offset := Vector3.ZERO
 var _aim_offset_timer := 0.0
 
+## Level of detail: bots far from the camera think less often (every 2nd / 4th
+## physics tick, with the accumulated delta). Their last inputs stay applied in
+## between, so movement and shooting continue smoothly.
+var lod_every := 1
+var _lod_counter := 0
+var _lod_delta := 0.0
+
 
 func _ready() -> void:
 	character = get_parent() as GameCharacter
 	rng.randomize()
-	var difficulty := MatchConfig.Difficulty.NORMAL
+	var difficulty: int = MatchConfig.Difficulty.NORMAL
 	if Game.match_manager != null and Game.match_manager.config != null:
 		difficulty = Game.match_manager.config.difficulty
 	profile = BotProfile.create(difficulty, rng)
@@ -52,6 +59,7 @@ func _ready() -> void:
 	_build_states()
 	fsm.change(&"idle")
 	character.damaged.connect(_on_damaged)
+	_lod_counter = rng.randi() % 4   # stagger bots across ticks
 
 
 ## Register behaviours here. Later phases add: loot, heal, zone, parachute...
@@ -69,6 +77,15 @@ func _physics_process(delta: float) -> void:
 	if Game.match_manager == null or Game.match_manager.state != MatchManager.State.IN_PROGRESS:
 		_idle_inputs()
 		return
+	_lod_delta += delta
+	_lod_counter += 1
+	if _lod_counter < lod_every:
+		return
+	_lod_counter = 0
+	delta = _lod_delta
+	_lod_delta = 0.0
+	lod_every = _compute_lod()
+
 	time += delta
 	perception.update(delta)
 	fsm.update(delta)
@@ -84,6 +101,15 @@ func _physics_process(delta: float) -> void:
 	elif dir.length_squared() > 0.01:
 		_turn_towards_dir(dir, 0.0, delta)
 	_apply_move(dir)
+
+
+func _compute_lod() -> int:
+	var d2 := Game.get_view_position().distance_squared_to(character.global_position)
+	if d2 < 120.0 * 120.0:
+		return 1
+	if d2 < 300.0 * 300.0:
+		return 2
+	return 4
 
 
 func _idle_inputs() -> void:

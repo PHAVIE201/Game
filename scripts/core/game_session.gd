@@ -69,4 +69,8 @@ func restart_match() -> void:
 
 func quit_to_menu() -> void:
 	get_tree().paused = false
+	if exit_to_menu_requested.get_connections().is_empty():
+		# Scene started on its own (F6): load the main menu scene instead.
+		get_tree().change_scene_to_file("res://scenes/main/main.tscn")
+		return
 	exit_to_menu_requested.emit()

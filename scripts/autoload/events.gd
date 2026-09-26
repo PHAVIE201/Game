@@ -9,6 +9,9 @@ extends Node
 ## class dependencies inside the autoload; receivers cast to GameCharacter /
 ## DamageInfo as needed.
 
+# The signals are emitted by other classes, which the analyzer cannot see.
+@warning_ignore_start("unused_signal")
+
 ## A character entered the match (player or bot).
 signal character_spawned(character: Node)
 ## A character received damage. `info` is a DamageInfo.

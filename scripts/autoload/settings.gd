@@ -101,7 +101,7 @@ func get_shadow_distance() -> float:
 			return 120.0
 
 
-func get_shadow_mode() -> int:
+func get_shadow_mode() -> DirectionalLight3D.ShadowMode:
 	match graphics_quality:
 		Quality.LOW:
 			return DirectionalLight3D.SHADOW_ORTHOGONAL
@@ -118,8 +118,10 @@ func use_ssao() -> bool:
 func apply_viewport(vp: Viewport) -> void:
 	if vp == null:
 		return
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
-	vp.scaling_3d_scale = get_render_scale()
+	var render_scale := get_render_scale()
+	# FSR 1.0 upscaling looks much sharper than bilinear at the same cost.
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if render_scale < 1.0 else Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = render_scale
 	match graphics_quality:
 		Quality.LOW:
 			vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
@@ -132,7 +134,7 @@ func apply_viewport(vp: Viewport) -> void:
 			vp.msaa_3d = Viewport.MSAA_DISABLED
 
 
-static func quality_name(q: int) -> String:
+func quality_name(q: int) -> String:
 	match q:
 		Quality.LOW:
 			return "Thấp"

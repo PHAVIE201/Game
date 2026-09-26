@@ -13,6 +13,8 @@ extends Node3D
 const MAX_TRACERS := 256
 const MAX_LIFETIME := 3.0
 const WHIZ_RADIUS := 2.5
+## Cell size of the character grid used as bullet broadphase.
+const GRID_CELL := 16.0
 
 class Bullet:
 	var pos: Vector3
@@ -26,6 +28,10 @@ class Bullet:
 var _bullets: Array[Bullet] = []
 var _tracer_mm: MultiMesh
 var _query := PhysicsRayQueryParameters3D.new()
+## Vector2i cell -> Array of GameCharacter, rebuilt every physics tick while
+## bullets are flying. A bullet only tests characters in the cells it crosses
+## instead of every character in the match.
+var _grid: Dictionary = {}
 
 
 func _ready() -> void:
@@ -76,6 +82,7 @@ func _physics_process(delta: float) -> void:
 	if _bullets.is_empty():
 		return
 	var space := get_world_3d().direct_space_state
+	_rebuild_grid()
 	var i := 0
 	while i < _bullets.size():
 		if _step(_bullets[i], delta, space):
@@ -84,6 +91,39 @@ func _physics_process(delta: float) -> void:
 			_bullets.pop_back()
 		else:
 			i += 1
+
+
+func _rebuild_grid() -> void:
+	_grid.clear()
+	if Game.match_manager == null:
+		return
+	var r: float = sqrt(CharacterHitboxes.BROADPHASE_RADIUS_SQ)
+	for c in Game.match_manager.alive:
+		var p := c.global_position
+		for gx in range(floori((p.x - r) / GRID_CELL), floori((p.x + r) / GRID_CELL) + 1):
+			for gz in range(floori((p.z - r) / GRID_CELL), floori((p.z + r) / GRID_CELL) + 1):
+				var key := Vector2i(gx, gz)
+				var list: Array = _grid.get(key, [])
+				if list.is_empty():
+					_grid[key] = list
+				list.append(c)
+
+
+## Characters whose grid cells the segment passes through.
+func _grid_candidates(from: Vector3, to: Vector3) -> Array:
+	var out := []
+	var steps := int(from.distance_to(to) / 4.0) + 1
+	var last := Vector2i(1 << 30, 1 << 30)
+	for s in steps + 1:
+		var p := from.lerp(to, float(s) / steps)
+		var key := Vector2i(floori(p.x / GRID_CELL), floori(p.z / GRID_CELL))
+		if key == last:
+			continue
+		last = key
+		for c in _grid.get(key, []):
+			if not out.has(c):
+				out.append(c)
+	return out
 
 
 ## Moves one bullet; returns true when it must be removed.
@@ -124,11 +164,11 @@ func _step(b: Bullet, delta: float, space: PhysicsDirectSpaceState3D) -> bool:
 	# 3) Characters.
 	var victim: GameCharacter = null
 	var part := DamageInfo.Part.TORSO
-	if Game.match_manager != null:
-		for c in Game.match_manager.alive:
+	if not _grid.is_empty():
+		for c: GameCharacter in _grid_candidates(b.pos, b.pos + dir * best_dist):
 			if c == b.shooter or c.is_dead:
 				continue
-			var center := c.get_hitbox_center()
+			var center: Vector3 = c.get_hitbox_center()
 			var q := Geometry3D.get_closest_point_to_segment(center, b.pos, next)
 			if q.distance_squared_to(center) > CharacterHitboxes.BROADPHASE_RADIUS_SQ:
 				continue
@@ -236,10 +276,10 @@ func _process(_delta: float) -> void:
 		var dir := b.vel / maxf(speed, 0.001)
 		var head := b.pos + b.vel * frac
 		var length := minf(b.traveled + speed * frac, 6.0)
-		var basis := Basis.looking_at(dir, Vector3.UP if absf(dir.y) < 0.99 else Vector3.RIGHT)
+		var rot := Basis.looking_at(dir, Vector3.UP if absf(dir.y) < 0.99 else Vector3.RIGHT)
 		# Stretch the unit box along its own Z axis (local scale).
-		basis = Basis(basis.x, basis.y, basis.z * maxf(length, 0.05))
-		_tracer_mm.set_instance_transform(k, Transform3D(basis, head - dir * length * 0.5))
+		rot = Basis(rot.x, rot.y, rot.z * maxf(length, 0.05))
+		_tracer_mm.set_instance_transform(k, Transform3D(rot, head - dir * length * 0.5))
 		var col := b.weapon.tracer_color
 		col.a = 0.9
 		_tracer_mm.set_instance_color(k, col)

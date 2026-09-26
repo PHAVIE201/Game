@@ -54,7 +54,7 @@ func show_result(r: Dictionary) -> void:
 	kills_label.text = str(r.kills)
 	damage_label.text = str(int(r.damage))
 	var t := int(r.time_alive)
-	time_label.text = "%d:%02d" % [t / 60, t % 60]
+	time_label.text = "%d:%02d" % [floori(t / 60.0), t % 60]
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	restart_button.grab_focus()

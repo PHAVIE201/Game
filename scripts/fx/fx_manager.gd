@@ -103,8 +103,8 @@ func _place_decal(pos: Vector3, normal: Vector3) -> void:
 	var d := _decals[_next_decal]
 	_next_decal = (_next_decal + 1) % DECAL_POOL
 	# Decals project along their local -Y axis, so +Y must match the surface normal.
-	var basis := _basis_from_normal(normal).rotated(normal, randf() * TAU)
-	d.global_transform = Transform3D(basis, pos)
+	var rot := _basis_from_normal(normal).rotated(normal, randf() * TAU)
+	d.global_transform = Transform3D(rot, pos)
 	d.visible = true
 
 
