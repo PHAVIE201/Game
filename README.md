@@ -17,7 +17,18 @@ bên ngoài.
 | ![Ngắm bắn](docs/screenshots/aiming.jpg) | ![Bot nằm bắn](docs/screenshots/bot_prone.jpg) |
 | ![Màn hình chết](docs/screenshots/death_screen.jpg) | ![Menu](docs/screenshots/main_menu.jpg) |
 
-Các tư thế hoạt họa (sinh hoàn toàn bằng code):
+Giai đoạn 2–3 (máy bay, nhảy dù, loot, ống ngắm, lựu đạn, bo):
+
+| | |
+|---|---|
+| ![Máy bay](docs/screenshots/plane.jpg) | ![Nhảy dù](docs/screenshots/parachute.jpg) |
+| ![Nhặt đồ](docs/screenshots/pickup.jpg) | ![Túi đồ](docs/screenshots/inventory.jpg) |
+| ![Ống ngắm 4x](docs/screenshots/scope_4x.jpg) | ![Súng có ống ngắm](docs/screenshots/gameplay2.jpg) |
+| ![Quỹ đạo lựu đạn](docs/screenshots/grenade_arc.jpg) | ![Lựu đạn nổ](docs/screenshots/explosion.jpg) |
+| ![Bom khói](docs/screenshots/smoke.jpg) | ![Tường bo](docs/screenshots/zone_wall.jpg) |
+| ![Bản đồ lớn (M)](docs/screenshots/world_map.jpg) | |
+
+Các tư thế hoạt họa (sinh hoàn toàn bằng code, gồm cả các loại súng, tay không, giáp, hồi máu):
 ![Tư thế](docs/screenshots/poses.jpg)
 
 ---
@@ -424,7 +435,7 @@ godot --headless --path . -- --autotest=40 --bots=8        # chạy thử trận
 godot --headless --path . -- --duel=10,25,50,100 --bots=3  # đo độ chính xác của bot
 godot --headless --path . -- --matchsim=600 --bots=24      # trận toàn bot: thống kê nhảy dù, bo, giao tranh
 godot --headless --path . res://tools/worldgen_test.tscn -- 1337 map.png   # xuất bản đồ PNG theo seed
-godot --path . -- --screenshots=out_dir                    # chụp màn hình các cảnh (cần GPU/xvfb)
+godot --path . -- --screenshots=out_dir                    # chụp màn hình các cảnh (cần GPU, hoặc xvfb + Vulkan phần mềm lavapipe)
 godot --path . res://tools/pose_gallery.tscn -- poses.png  # ảnh tổng hợp các tư thế
 ```
 
