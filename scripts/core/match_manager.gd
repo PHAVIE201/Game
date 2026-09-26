@@ -100,6 +100,11 @@ func _give_starting_kit(c: GameCharacter) -> void:
 	if _rng.randf() < 0.5:
 		c.give_weapon(WeaponDB.P1, -1, false)
 		c.inventory.add_ammo(WeaponDB.P1.ammo_type, 9999)
+	# Some armor, like a bot that already looted a house or two.
+	if _rng.randf() < 0.55:
+		c.inventory.wear([&"vest_1", &"vest_1", &"vest_2"][_rng.randi() % 3])
+	if _rng.randf() < 0.45:
+		c.inventory.wear([&"helmet_1", &"helmet_1", &"helmet_2"][_rng.randi() % 3])
 
 
 func _weighted_pick(weights: Array[float]) -> int:

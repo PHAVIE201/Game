@@ -51,6 +51,7 @@ var swimming := false
 var reload_progress := -1.0   ## 0..1 while reloading, -1 otherwise
 var bolt_progress := -1.0     ## 0..1 while a bolt-action gun cycles, -1 otherwise
 var swap_amount := 0.0        ## 1 = weapon lowered (switching), 0 = ready
+var using_item := false       ## bandaging / drinking: gun lowered, hands together
 
 ## Model-space transforms of every bone after the last animate().
 var bone_global: Array[Transform3D] = []
@@ -64,12 +65,17 @@ var flash: MeshInstance3D
 var flash_light: OmniLight3D
 ## Primary weapons carried on the back (not in the hands).
 var back_guns: Array[MeshInstance3D] = []
+var helmet_mesh: MeshInstance3D
+var vest_mesh: MeshInstance3D
+
+static var _armor_cache: Dictionary = {}
 
 var _gun_model: Dictionary
 ## False when the character holds nothing (fists).
 var _armed := true
 var _punch := 0.0
 var _punch_side := 1.0
+var _use := 0.0
 var _crouch := 0.0
 var _prone := 0.0
 var _ads := 0.0
@@ -141,9 +147,60 @@ func build(outfit: Dictionary, weapon_model: StringName, use_flash_light: bool) 
 		add_child(bg)
 		back_guns.append(bg)
 
+	helmet_mesh = MeshInstance3D.new()
+	helmet_mesh.name = "Helmet"
+	helmet_mesh.layers = Layers.RENDER_CHARACTERS
+	helmet_mesh.visible = false
+	add_child(helmet_mesh)
+	vest_mesh = MeshInstance3D.new()
+	vest_mesh.name = "Vest"
+	vest_mesh.layers = Layers.RENDER_CHARACTERS
+	vest_mesh.visible = false
+	add_child(vest_mesh)
+
 	bone_global.resize(BONE_COUNT)
 	set_weapon(weapon_model)
 	animate(0.0)
+
+
+## Shows the worn helmet / vest (&"" = none).
+func set_armor(helmet_id: StringName, vest_id: StringName) -> void:
+	helmet_mesh.visible = helmet_id != &""
+	vest_mesh.visible = vest_id != &""
+	if helmet_mesh.visible:
+		helmet_mesh.mesh = _armor_mesh(helmet_id)
+	if vest_mesh.visible:
+		vest_mesh.mesh = _armor_mesh(vest_id)
+
+
+## Helmet: mesh in HEAD bone space. Vest: mesh in CHEST bone space.
+static func _armor_mesh(id: StringName) -> ArrayMesh:
+	if _armor_cache.has(id):
+		return _armor_cache[id]
+	var info := ItemDB.get_info(id)
+	var col: Color = info.get("color", Color.GRAY)
+	var level := int(info.get("level", 1))
+	var mb := MeshBuilder.new()
+	if ItemDB.kind_of(id) == ItemDB.Kind.HELMET:
+		# Dome above the brow (the face stays visible).
+		mb.add_frustum(Vector3(0, 0.155, 0.005), 0.175, 0.155, 0.06, 8, col, false, PI / 8.0)
+		mb.add_frustum(Vector3(0, 0.215, 0.005), 0.155, 0.105, 0.05, 8, col, false, PI / 8.0)
+		mb.add_frustum(Vector3(0, 0.265, 0.005), 0.105, 0.0, 0.035, 8, col, false, PI / 8.0)
+		mb.add_frustum(Vector3(0, 0.15, 0.005), 0.185, 0.185, 0.02, 8, col.darkened(0.2), true, PI / 8.0)
+		if level >= 2:
+			mb.add_box(Vector3(0, 0.24, -0.13), Vector3(0.07, 0.04, 0.03), Color(0.1, 0.1, 0.1))
+		if level >= 3:
+			# Visor
+			mb.add_box(Vector3(0, 0.15, -0.18), Vector3(0.26, 0.05, 0.02), Color(0.15, 0.2, 0.25))
+	else:
+		mb.add_box(Vector3(0, 0.04, 0.0), Vector3(0.47, 0.36, 0.3), col)
+		mb.add_box(Vector3(0, 0.23, 0.0), Vector3(0.3, 0.05, 0.26), col.darkened(0.2))
+		for k in level + 1:
+			var x := -0.14 + k * (0.28 / maxf(level, 1))
+			mb.add_box(Vector3(x, -0.02, -0.16), Vector3(0.09, 0.11, 0.05), col.darkened(0.25))
+	var mesh := mb.commit(MeshBuilder.make_vertex_color_material(0.8))
+	_armor_cache[id] = mesh
+	return mesh
 
 
 ## Puts a gun model in the hands (&"none" = bare fists).
@@ -331,6 +388,7 @@ func animate(delta: float) -> void:
 	_swim = move_toward(_swim, 1.0 if swimming else 0.0, k * 3.0)
 	_kick = move_toward(_kick, 0.0, k * 12.0)
 	_punch = move_toward(_punch, 0.0, k * 4.5)
+	_use = move_toward(_use, 1.0 if using_item else 0.0, k * 4.0)
 	if _dead:
 		_death_t = minf(_death_t + k * 2.2, 1.0)
 
@@ -412,10 +470,11 @@ func animate(delta: float) -> void:
 	if bolt_progress >= 0.0:
 		var bp := sin(clampf(bolt_progress * 1.6, 0.0, 1.0) * PI)
 		gun_basis = gun_basis * Basis(Vector3.FORWARD, -0.25 * bp)
-	if swap_amount > 0.0:
-		# Weapon switch: the gun dips out of view and comes back up.
-		gun_basis = gun_basis * Basis(Vector3.RIGHT, -0.9 * swap_amount)
-		off += Vector3(0.0, -0.2, 0.08) * swap_amount
+	var lowered := maxf(swap_amount, _use)
+	if lowered > 0.0:
+		# Weapon switch / using an item: the gun dips out of the way.
+		gun_basis = gun_basis * Basis(Vector3.RIGHT, -0.9 * lowered)
+		off += Vector3(0.0, -0.2, 0.08) * lowered
 	off = off.lerp(_gun_model.prone as Vector3, _prone)
 	off.z += _kick * 0.06
 	gun_transform = Transform3D(gun_basis, anchor + gun_basis * off)
@@ -436,6 +495,11 @@ func animate(delta: float) -> void:
 		_unarmed_hands(g, move_amt)
 		hand_l = _fist_l
 		hand_r = _fist_r
+	if _use > 0.0:
+		# Hands together in front of the chest (bandaging / drinking).
+		var wobble := sin(_phase * 0.5 + _death_t) * 0.02
+		hand_l = hand_l.lerp(g[B.CHEST] * Vector3(-0.07, 0.05 + wobble, -0.26), _use)
+		hand_r = hand_r.lerp(g[B.CHEST] * Vector3(0.06, 0.08 - wobble, -0.27), _use)
 	if _dead or _swim > 0.5:
 		# Relaxed arms.
 		hand_l = g[B.CHEST] * Vector3(-0.3, -0.45, 0.05)
@@ -476,6 +540,10 @@ func animate(delta: float) -> void:
 		g[ft] = Transform3D(Basis(q), g[ft].origin)
 
 	_update_back_guns(g)
+	if helmet_mesh.visible:
+		helmet_mesh.transform = g[B.HEAD]
+	if vest_mesh.visible:
+		vest_mesh.transform = g[B.CHEST]
 	_apply_to_skeleton()
 
 

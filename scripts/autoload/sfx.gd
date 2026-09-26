@@ -83,6 +83,8 @@ func _build_sounds() -> void:
 	_streams[&"punch"] = _make(_synth_thud(0.1, 85.0, 0.9))
 	_streams[&"swish"] = _make(_synth_noise_burst(0.12, 0.08, 0.3))
 	_streams[&"shell_in"] = _make(_synth_click(0.07, 1100.0, 0.8))
+	_streams[&"bandage"] = _make(_synth_noise_burst(0.6, 0.12, 0.35))
+	_streams[&"drink"] = _make(_synth_tone(0.35, 180.0, 0.35, 6.0))
 	_streams[&"dry_fire"] = _make(_synth_click(0.05, 2400.0, 0.5))
 	_streams[&"mag_out"] = _make(_synth_click(0.09, 900.0, 0.7))
 	_streams[&"mag_in"] = _make(_synth_click(0.1, 1300.0, 0.9))

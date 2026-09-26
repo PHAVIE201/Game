@@ -38,6 +38,11 @@ const POSES := [
 	["tay khong thu", 0.0, 0.0, 0, 0, true, false, false, false, -1.0, false, {"gun": &"none"}],
 	["chay tay khong", 6.4, 0.0, 0, 0, false, true, false, false, -1.0, false, {"gun": &"none", "back": [&"shotgun", &"dmr"]}],
 	["doi sung", 0.0, 0.0, 0, 0, false, false, false, false, -1.0, false, {"gun": &"rifle", "swap": 0.6}],
+	["giap cap 1", 0.0, 0.0, 0, 0, false, false, false, false, -1.0, false, {"helmet": &"helmet_1", "vest": &"vest_1"}],
+	["giap cap 2", 2.0, 0.0, 0, 0, true, false, false, false, -1.0, false, {"helmet": &"helmet_2", "vest": &"vest_2", "gun": &"smg"}],
+	["giap cap 3", 0.0, 0.0, 1, 0, true, false, false, false, -1.0, false, {"helmet": &"helmet_3", "vest": &"vest_3", "gun": &"dmr"}],
+	["bang bo", 1.5, 0.0, 0, 0, false, false, false, false, -1.0, false, {"use": true, "vest": &"vest_2"}],
+	["uong nuoc", 0.0, 0.0, 1, 0, false, false, false, false, -1.0, false, {"use": true, "gun": &"none"}],
 ]
 
 var _cam: Camera3D
@@ -82,6 +87,8 @@ func _ready() -> void:
 			model.set_back_weapons(back)
 		model.bolt_progress = extras.get("bolt", -1.0)
 		model.swap_amount = extras.get("swap", 0.0)
+		model.set_armor(extras.get("helmet", &""), extras.get("vest", &""))
+		model.using_item = extras.get("use", false)
 		model.velocity_world = Vector3(float(pose[2]), 0, -float(pose[1]))
 		model.crouch_target = float(pose[3])
 		model.prone_target = float(pose[4])

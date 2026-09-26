@@ -206,8 +206,7 @@ func _weapon_check() -> void:
 		if not c.is_player:
 			dummy = c
 			break
-	var dummy_brain := dummy.get_node("BotBrain") as BotBrain
-	dummy_brain.set_physics_process(false)
+	_freeze_bots(true)
 	dummy.input_fire = false
 	dummy.input_move = Vector2.ZERO
 	dummy.max_health = 1.0e9
@@ -271,14 +270,86 @@ func _weapon_check() -> void:
 	await _wait(GameCharacter.SWAP_TIME + 0.1)
 	print("[auto] weapon check: ", " ".join(report), " active=", p.weapon_data.id)
 	await _loot_check(p)
+	await _armor_heal_check(p)
 	Events.character_damaged.disconnect(on_dmg)
 	p.input_aim = false
 	p.max_health = 100.0
 	p.health = 100.0
 	dummy.max_health = 100.0
 	dummy.health = 100.0
-	dummy_brain.set_physics_process(true)
+	_freeze_bots(false)
 	_weapon_check_state = 2
+
+
+func _freeze_bots(frozen: bool) -> void:
+	for c in Game.match_manager.alive:
+		var b := c.get_node_or_null("BotBrain") as BotBrain
+		if b != null:
+			b.set_physics_process(not frozen)
+			c.input_fire = false
+			c.input_move = Vector2.ZERO
+
+
+func _hit(p: GameCharacter, part: int, amount: float) -> void:
+	var info := DamageInfo.new()
+	info.amount = amount
+	info.part = part
+	info.direction = Vector3.FORWARD
+	p.apply_damage(info)
+
+
+## Armor absorbs damage and wears out; heals / boosts follow their rules.
+func _armor_heal_check(p: GameCharacter) -> void:
+	p.max_health = 100.0
+	p.health = 100.0
+	p.boost = 0.0
+	p.inventory.clear()
+	p.inventory.wear(&"vest_2")
+	p.inventory.wear(&"helmet_1")
+	_hit(p, DamageInfo.Part.TORSO, 50.0)
+	var after_torso := p.health
+	_hit(p, DamageInfo.Part.HEAD, 40.0)
+	var after_head := p.health
+	if absf(after_torso - 70.0) > 0.1 or absf(after_head - 42.0) > 0.1 or p.inventory.vest_durability >= 220.0:
+		_checks_failed.append("armor: torso->%.1f head->%.1f vest=%.0f" % [after_torso, after_head, p.inventory.vest_durability])
+	p.health = 100.0
+	_hit(p, DamageInfo.Part.HEAD, 30.0)
+	_hit(p, DamageInfo.Part.HEAD, 20.0)
+	_hit(p, DamageInfo.Part.HEAD, 60.0)
+	if p.inventory.helmet != &"":
+		_checks_failed.append("helmet should break (durability %.0f)" % p.inventory.helmet_durability)
+	# First aid: to 75.
+	p.health = 40.0
+	p.inventory.add(&"first_aid", 1)
+	p.inventory.add(&"bandage", 2)
+	p.inventory.add(&"energy_drink", 1)
+	if not p.use_item(&"first_aid"):
+		_checks_failed.append("could not start first aid")
+	await _wait(6.4)
+	var healed := p.health
+	var can_bandage := p.can_use_item(&"bandage")
+	# Cancel by firing.
+	p.health = 50.0
+	p.use_item(&"bandage")
+	await _wait(0.5)
+	p.input_fire = true
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	p.input_fire = false
+	var cancelled := not p.is_using_item() and p.inventory.get_count(&"bandage") == 2
+	# Boost heals over time.
+	p.use_item(&"energy_drink")
+	await _wait(4.3)
+	var boost := p.boost
+	var h0 := p.health
+	await _wait(2.0)
+	var regen := p.health - h0
+	print("[auto] armor/heal check: torso=%.0f head=%.0f first_aid->%.0f bandage_at_75=%s cancel=%s boost=%.0f regen=%.1f" % [
+		after_torso, after_head, healed, can_bandage, cancelled, boost, regen])
+	if absf(healed - 75.0) > 0.6 or can_bandage or not cancelled or boost < 35.0 or regen < 0.5:
+		_checks_failed.append("heal/boost rules")
+	p.health = 100.0
+	p.boost = 0.0
 
 
 ## Loot rules: world loot exists, pick up / capacity / drop / inventory screen.

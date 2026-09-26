@@ -14,6 +14,10 @@ var hit_position := Vector3.ZERO
 ## Direction the damage travelled (used for death fall direction / indicators).
 var direction := Vector3.FORWARD
 var distance := 0.0
+## Zone / fall damage: armor does not help.
+var ignore_armor := false
+## Damage before armor (set by GameCharacter.apply_damage).
+var raw_amount := 0.0
 
 
 func is_headshot() -> bool:

@@ -77,6 +77,8 @@ func _process(delta: float) -> void:
 				key.append(it.count)
 		key.append(p.inventory.items.hash())
 		key.append(p.inventory.backpack)
+		key.append(p.inventory.helmet)
+		key.append(p.inventory.vest)
 		key.append(p.active_slot)
 		for w in p.slots:
 			key.append(w.get_instance_id() if w != null else 0)
@@ -230,6 +232,10 @@ func _refresh() -> void:
 		var item_id: StringName = id
 		var n := inv.get_count(item_id)
 		var actions := []
+		if ItemDB.is_consumable(item_id):
+			actions.append(["Dùng", func():
+				if p.use_item(item_id):
+					close()])
 		if ItemDB.kind_of(item_id) == ItemDB.Kind.AMMO and n > ItemDB.stack_of(item_id):
 			var part := ItemDB.stack_of(item_id)
 			actions.append(["Bỏ %d" % part, func(): Game.loot.drop_item(p, item_id, part)])
@@ -254,6 +260,14 @@ func _refresh() -> void:
 		_row(_equip_box, text, col, actions)
 	var sep := HSeparator.new()
 	_equip_box.add_child(sep)
+	for is_vest in [false, true]:
+		var id := inv.vest if is_vest else inv.helmet
+		var vest_flag: bool = is_vest
+		if id == &"":
+			_row(_equip_box, ("Áo giáp" if is_vest else "Mũ") + ": —", Color(1, 1, 1, 0.4), [])
+		else:
+			var text := "%s (%d%%)" % [ItemDB.display_name(id), roundi(inv.armor_ratio(is_vest) * 100.0)]
+			_row(_equip_box, text, _kind_color(id), [["Bỏ", func(): Game.loot.drop_armor(p, vest_flag)]])
 	if inv.backpack != &"":
 		_row(_equip_box, ItemDB.display_name(inv.backpack), _kind_color(inv.backpack), [["Bỏ", func(): Game.loot.drop_backpack(p)]])
 	else:

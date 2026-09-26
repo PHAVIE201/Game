@@ -54,10 +54,30 @@ func _unhandled_input(event: InputEvent) -> void:
 		character.equip_slot(GameCharacter.SLOT_PISTOL)
 	elif event.is_action_pressed("holster"):
 		character.holster()
+	elif event.is_action_pressed("quick_heal"):
+		var id := character.pick_heal()
+		if id == &"":
+			Events.loot_message.emit("Không cần / không có đồ hồi máu phù hợp")
+		else:
+			character.use_item(id)
+	elif _quick_use_key(event) != &"":
+		var id := _quick_use_key(event)
+		if not character.use_item(id) and character.using_item != id:
+			if character.inventory.get_count(id) <= 0:
+				Events.loot_message.emit("Không có " + ItemDB.display_name(id))
+			else:
+				Events.loot_message.emit("Chưa dùng được " + ItemDB.display_name(id))
 	elif event.is_action_pressed("weapon_next"):
 		character.cycle_weapon(1)
 	elif event.is_action_pressed("weapon_prev"):
 		character.cycle_weapon(-1)
+
+
+func _quick_use_key(event: InputEvent) -> StringName:
+	for id in ItemDB.QUICK_USE:
+		if event.is_action_pressed("use_" + String(id)):
+			return id
+	return &""
 
 
 func _process(_delta: float) -> void:

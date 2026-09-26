@@ -90,6 +90,15 @@ func _draw() -> void:
 		draw_arc(c, 26.0, 0.0, TAU, 40, Color(0, 0, 0, 0.35), 4.0)
 		draw_arc(c, 26.0, -PI * 0.5, -PI * 0.5 + TAU * prog, 40, Color(1.0, 0.8, 0.3, 0.95), 4.0)
 
+	# Heal / boost in progress
+	if p.is_using_item():
+		var up := p.get_use_progress()
+		draw_arc(c, 30.0, 0.0, TAU, 40, Color(0, 0, 0, 0.35), 5.0)
+		draw_arc(c, 30.0, -PI * 0.5, -PI * 0.5 + TAU * up, 40, Color(0.5, 1.0, 0.55, 0.95), 5.0)
+		var font := get_theme_default_font()
+		var text := "Đang dùng %s" % ItemDB.display_name(p.using_item)
+		draw_string(font, c + Vector2(-150, 58), text, HORIZONTAL_ALIGNMENT_CENTER, 300, 17, Color(0.85, 1.0, 0.85))
+
 	# Damage direction indicators (relative to where the camera looks).
 	if Game.camera != null:
 		var cam_fwd := -Game.camera.global_transform.basis.z

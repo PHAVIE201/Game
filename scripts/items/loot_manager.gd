@@ -20,10 +20,14 @@ const VIEW_RANGE := 85.0
 const SPOT_CHANCE := 0.82
 
 ## Relative weights of what a loot spot contains.
-const SPOT_TABLE := {"weapon": 30.0, "ammo": 32.0, "backpack": 7.0}
+const SPOT_TABLE := {"weapon": 26.0, "ammo": 26.0, "backpack": 6.0, "helmet": 7.0, "vest": 7.0, "heal": 17.0, "boost": 7.0}
 const WEAPON_WEIGHTS := {&"k7": 22.0, &"v9": 22.0, &"b12": 18.0, &"d3": 9.0, &"r8": 6.0, &"p1": 23.0}
 const AMMO_WEIGHTS := {&"ammo_rifle": 35.0, &"ammo_smg": 30.0, &"ammo_shotgun": 15.0, &"ammo_sniper": 20.0}
 const BACKPACK_WEIGHTS := {&"backpack_1": 60.0, &"backpack_2": 30.0, &"backpack_3": 10.0}
+const HELMET_WEIGHTS := {&"helmet_1": 55.0, &"helmet_2": 33.0, &"helmet_3": 12.0}
+const VEST_WEIGHTS := {&"vest_1": 55.0, &"vest_2": 33.0, &"vest_3": 12.0}
+const HEAL_WEIGHTS := {&"bandage": 55.0, &"first_aid": 32.0, &"medkit": 13.0}
+const BOOST_WEIGHTS := {&"energy_drink": 65.0, &"painkiller": 35.0}
 
 
 class Pickup:
@@ -32,6 +36,8 @@ class Pickup:
 	var count := 1
 	## Weapons: rounds left in the magazine.
 	var mag_ammo := 0
+	## Helmet / vest: remaining durability (< 0 = new).
+	var durability := -1.0
 	var pos := Vector3.ZERO
 	var yaw := 0.0
 	var node: MeshInstance3D
@@ -42,6 +48,9 @@ class Pickup:
 		var text := ItemDB.display_name(id)
 		if count > 1:
 			text += " ×%d" % count
+		if durability >= 0.0:
+			var full := float(ItemDB.get_info(id).get("durability", 100.0))
+			text += " (%d%%)" % roundi(100.0 * durability / full)
 		return text
 
 
@@ -99,6 +108,15 @@ func _spawn_spot(at: Vector3, rng: RandomNumberGenerator) -> void:
 			spawn(id, ItemDB.stack_of(id) * rng.randi_range(1, 2), at, yaw)
 		"backpack":
 			spawn(_pick(BACKPACK_WEIGHTS, rng), 1, at, yaw)
+		"helmet":
+			spawn(_pick(HELMET_WEIGHTS, rng), 1, at, yaw)
+		"vest":
+			spawn(_pick(VEST_WEIGHTS, rng), 1, at, yaw)
+		"heal":
+			var id: StringName = _pick(HEAL_WEIGHTS, rng)
+			spawn(id, ItemDB.stack_of(id), at, yaw)
+		"boost":
+			spawn(_pick(BOOST_WEIGHTS, rng), 1, at, yaw)
 
 
 static func _pick(table: Dictionary, rng: RandomNumberGenerator) -> Variant:
@@ -247,6 +265,15 @@ func take(c: GameCharacter, p: Pickup, amount := -1) -> int:
 				spawn(old.data.id, 1, drop_position(c, 0), c.aim_yaw + PI * 0.5, old.ammo)
 			_emit_loot(c, "Đã nhặt " + data.display_name)
 			return Take.OK
+		ItemDB.Kind.HELMET, ItemDB.Kind.VEST:
+			var dur := p.durability
+			remove(p)
+			var old: Array = c.inventory.wear(id, dur)
+			if old[0] != &"":
+				var dropped := spawn(old[0], 1, drop_position(c, 0), c.aim_yaw)
+				dropped.durability = old[1]
+			_emit_loot(c, "Đã mặc " + ItemDB.display_name(id))
+			return Take.OK
 		ItemDB.Kind.BACKPACK:
 			var cap_new := ItemDB.BASE_CAPACITY + float(ItemDB.get_info(id).get("capacity", 0.0))
 			if not c.inventory.unlimited and c.inventory.used_weight() > cap_new + 0.01:
@@ -298,6 +325,14 @@ func drop_backpack(c: GameCharacter) -> void:
 	spawn(bp, 1, drop_position(c, 7), c.aim_yaw)
 
 
+## Takes off the helmet or the vest and drops it.
+func drop_armor(c: GameCharacter, is_vest: bool) -> void:
+	var old: Array = c.inventory.take_off(is_vest)
+	if old[0] != &"":
+		var p := spawn(old[0], 1, drop_position(c, 5), c.aim_yaw)
+		p.durability = old[1]
+
+
 ## Everything a dead character carried falls around the body.
 func drop_everything(c: GameCharacter) -> void:
 	var k := 0
@@ -317,6 +352,11 @@ func drop_everything(c: GameCharacter) -> void:
 	if c.inventory.backpack != &"":
 		spawn(c.inventory.backpack, 1, drop_position(c, k, 0.9), k * 1.1)
 		k += 1
+	for armor in [[c.inventory.helmet, c.inventory.helmet_durability], [c.inventory.vest, c.inventory.vest_durability]]:
+		if armor[0] != &"":
+			var p := spawn(armor[0], 1, drop_position(c, k, 0.9), k * 0.9)
+			p.durability = armor[1]
+			k += 1
 	c.clear_loadout()
 
 

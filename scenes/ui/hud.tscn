@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/ui/health_bar.gd" id="4_health"]
 [ext_resource type="Script" path="res://scripts/ui/kill_feed.gd" id="5_feed"]
 [ext_resource type="Script" path="res://scripts/ui/weapon_slots.gd" id="6_slots"]
+[ext_resource type="Script" path="res://scripts/ui/armor_status.gd" id="7_armor"]
 
 [sub_resource type="Gradient" id="vig_gradient"]
 offsets = PackedFloat32Array(0.5, 1)
@@ -129,6 +130,22 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
 script = ExtResource("4_health")
+
+[node name="ArmorStatus" type="Control" parent="Root"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = 222.0
+offset_top = -64.0
+offset_right = 400.0
+offset_bottom = -26.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("7_armor")
 
 [node name="StanceLabel" type="Label" parent="Root"]
 layout_mode = 1
@@ -276,5 +293,6 @@ theme_override_font_sizes/font_size = 15
 text = "WASD: di chuyển   Shift: chạy nhanh   Ctrl: đi bộ   Space: nhảy
 C: ngồi   Z: nằm   Chuột trái: bắn   Chuột phải (giữ): ngắm
 R: nạp đạn   B: đổi chế độ bắn   1/2/3, lăn chuột: đổi súng   X: cất súng
-F: nhặt đồ   Tab: túi đồ   Esc: tạm dừng   F3: hiệu năng"
+F: nhặt đồ   Tab: túi đồ   H: hồi máu nhanh   4-8: băng gạc/sơ cứu/y tế/tăng lực/giảm đau
+Esc: tạm dừng   F3: hiệu năng"
 vertical_alignment = 2

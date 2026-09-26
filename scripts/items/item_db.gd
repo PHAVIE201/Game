@@ -21,7 +21,25 @@ const ITEMS := {
 	&"backpack_1": {"name": "Balo cấp 1", "kind": Kind.BACKPACK, "level": 1, "capacity": 100.0, "weight": 0.0, "stack": 1, "color": Color(0.72, 0.62, 0.42)},
 	&"backpack_2": {"name": "Balo cấp 2", "kind": Kind.BACKPACK, "level": 2, "capacity": 150.0, "weight": 0.0, "stack": 1, "color": Color(0.42, 0.48, 0.3)},
 	&"backpack_3": {"name": "Balo cấp 3", "kind": Kind.BACKPACK, "level": 3, "capacity": 200.0, "weight": 0.0, "stack": 1, "color": Color(0.3, 0.26, 0.22)},
+
+	# Armor: `reduction` = share of the damage absorbed, `durability` = damage it can take.
+	&"helmet_1": {"name": "Mũ cấp 1", "kind": Kind.HELMET, "level": 1, "reduction": 0.3, "durability": 80.0, "stack": 1, "color": Color(0.55, 0.58, 0.4)},
+	&"helmet_2": {"name": "Mũ cấp 2", "kind": Kind.HELMET, "level": 2, "reduction": 0.4, "durability": 150.0, "stack": 1, "color": Color(0.3, 0.38, 0.3)},
+	&"helmet_3": {"name": "Mũ cấp 3", "kind": Kind.HELMET, "level": 3, "reduction": 0.55, "durability": 230.0, "stack": 1, "color": Color(0.16, 0.17, 0.19)},
+	&"vest_1": {"name": "Áo giáp cấp 1", "kind": Kind.VEST, "level": 1, "reduction": 0.3, "durability": 200.0, "stack": 1, "color": Color(0.6, 0.6, 0.45)},
+	&"vest_2": {"name": "Áo giáp cấp 2", "kind": Kind.VEST, "level": 2, "reduction": 0.4, "durability": 220.0, "stack": 1, "color": Color(0.32, 0.4, 0.3)},
+	&"vest_3": {"name": "Áo giáp cấp 3", "kind": Kind.VEST, "level": 3, "reduction": 0.55, "durability": 250.0, "stack": 1, "color": Color(0.2, 0.21, 0.24)},
+
+	# Healing: `heal` HP up to `heal_cap`; boosts fill the boost bar instead.
+	&"bandage": {"name": "Băng gạc", "kind": Kind.HEAL, "heal": 10.0, "heal_cap": 75.0, "use_time": 4.0, "weight": 2.0, "stack": 5, "color": Color(0.95, 0.93, 0.85)},
+	&"first_aid": {"name": "Bộ sơ cứu", "kind": Kind.HEAL, "heal": 100.0, "heal_cap": 75.0, "use_time": 6.0, "weight": 10.0, "stack": 1, "color": Color(0.92, 0.92, 0.9)},
+	&"medkit": {"name": "Hộp y tế", "kind": Kind.HEAL, "heal": 100.0, "heal_cap": 100.0, "use_time": 8.0, "weight": 20.0, "stack": 1, "color": Color(0.85, 0.2, 0.2)},
+	&"energy_drink": {"name": "Nước tăng lực", "kind": Kind.BOOST, "boost": 40.0, "use_time": 4.0, "weight": 4.0, "stack": 1, "color": Color(0.2, 0.75, 0.95)},
+	&"painkiller": {"name": "Thuốc giảm đau", "kind": Kind.BOOST, "boost": 60.0, "use_time": 6.0, "weight": 10.0, "stack": 1, "color": Color(0.95, 0.65, 0.2)},
 }
+
+## Heals / boosts in the order of the quick-use keys (4..8).
+const QUICK_USE: Array[StringName] = [&"bandage", &"first_aid", &"medkit", &"energy_drink", &"painkiller"]
 
 
 static func exists(id: StringName) -> bool:
@@ -55,6 +73,16 @@ static func stack_of(id: StringName) -> int:
 
 static func level_of(id: StringName) -> int:
 	return int(ITEMS[id].get("level", 0)) if ITEMS.has(id) else 0
+
+
+static func is_armor(id: StringName) -> bool:
+	var k := kind_of(id)
+	return k == Kind.HELMET or k == Kind.VEST
+
+
+static func is_consumable(id: StringName) -> bool:
+	var k := kind_of(id)
+	return k == Kind.HEAL or k == Kind.BOOST
 
 
 ## Items that go into the backpack (counted, weigh something).

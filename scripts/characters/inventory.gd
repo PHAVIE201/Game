@@ -11,6 +11,11 @@ signal changed
 
 var items: Dictionary = {}   # StringName -> int
 var backpack := &""
+## Armor worn (&"" = none) and its remaining durability.
+var helmet := &""
+var helmet_durability := 0.0
+var vest := &""
+var vest_durability := 0.0
 ## Bots of the early phases carry unlimited ammo and ignore weight.
 var unlimited := false
 
@@ -73,6 +78,74 @@ func set_backpack(id: StringName) -> StringName:
 	return old
 
 
+## Puts on a helmet / vest. `durability` < 0 = brand new. Returns the old
+## piece as [id, durability] (id &"" if none).
+func wear(id: StringName, durability := -1.0) -> Array:
+	var info := ItemDB.get_info(id)
+	var full := float(info.get("durability", 100.0))
+	var dur := full if durability < 0.0 else durability
+	var old := []
+	if ItemDB.kind_of(id) == ItemDB.Kind.HELMET:
+		old = [helmet, helmet_durability]
+		helmet = id
+		helmet_durability = dur
+	else:
+		old = [vest, vest_durability]
+		vest = id
+		vest_durability = dur
+	changed.emit()
+	return old
+
+
+## Takes off the helmet (`vest` false) or the vest. Returns [id, durability].
+func take_off(is_vest: bool) -> Array:
+	var old := [vest, vest_durability] if is_vest else [helmet, helmet_durability]
+	if is_vest:
+		vest = &""
+		vest_durability = 0.0
+	else:
+		helmet = &""
+		helmet_durability = 0.0
+	changed.emit()
+	return old
+
+
+## Lets the armor covering a body part soak up damage. Returns the damage
+## that goes through. `broke` (out) is set when the piece is destroyed.
+func absorb(part: int, amount: float, result: Dictionary) -> float:
+	var head := part == DamageInfo.Part.HEAD
+	var id := helmet if head else vest
+	if id == &"" or part == DamageInfo.Part.LIMB:
+		return amount
+	var reduction := float(ItemDB.get_info(id).get("reduction", 0.0))
+	var through := amount * (1.0 - reduction)
+	# The armor wears down by the damage it stopped plus a share of the hit.
+	var wear_amount := amount * reduction + amount * 0.25
+	if head:
+		helmet_durability -= wear_amount
+		if helmet_durability <= 0.0:
+			result["broke"] = helmet
+			helmet = &""
+			helmet_durability = 0.0
+	else:
+		vest_durability -= wear_amount
+		if vest_durability <= 0.0:
+			result["broke"] = vest
+			vest = &""
+			vest_durability = 0.0
+	changed.emit()
+	return through
+
+
+## 0..1 durability of a worn piece (for the HUD).
+func armor_ratio(is_vest: bool) -> float:
+	var id := vest if is_vest else helmet
+	if id == &"":
+		return 0.0
+	var full := float(ItemDB.get_info(id).get("durability", 100.0))
+	return clampf((vest_durability if is_vest else helmet_durability) / full, 0.0, 1.0)
+
+
 ## Ammo helpers used by Weapon (ammo is just another stackable item).
 func get_ammo(type: StringName) -> int:
 	return get_count(type)
@@ -89,4 +162,8 @@ func take_ammo(type: StringName, amount: int) -> int:
 func clear() -> void:
 	items.clear()
 	backpack = &""
+	helmet = &""
+	helmet_durability = 0.0
+	vest = &""
+	vest_durability = 0.0
 	changed.emit()

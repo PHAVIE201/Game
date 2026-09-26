@@ -18,6 +18,8 @@ signal stance_changed(stance: int)
 signal weapon_changed
 ## A shot / punch left the active weapon.
 signal weapon_fired
+## A helmet / vest was destroyed by damage.
+signal armor_broken(id: StringName)
 
 const RADIUS := 0.3
 const HEIGHTS := [1.75, 1.15, 0.62]
@@ -43,6 +45,10 @@ const SLOT_PRIMARY_2 := 1
 const SLOT_PISTOL := 2
 const SLOT_COUNT := 3
 const SWAP_TIME := 0.55
+
+## Boost bar (energy drink / painkiller): drains over time and heals meanwhile.
+const BOOST_MAX := 100.0
+const BOOST_DECAY := 0.6
 
 @export var is_player := false
 @export var display_name := "Người chơi"
@@ -82,6 +88,10 @@ var weapon: Weapon
 ## Shortcut to weapon.data.
 var weapon_data: WeaponData
 var fists: Weapon
+## 0..100, see BOOST_*.
+var boost := 0.0
+## Heal / boost item being used (&"" = none).
+var using_item := &""
 var model: CharacterModel
 var hitboxes: CharacterHitboxes
 var last_attacker: GameCharacter = null
@@ -97,6 +107,9 @@ var _jump_requested := false
 var _reload_requested := false
 var _swap_left := 0.0
 var _bolt_sound_pending := false
+var _use_left := 0.0
+var _use_total := 0.0
+var _worn := []
 var _stance_request := -1
 var _collision: CollisionShape3D
 var _capsule: CapsuleShape3D
@@ -134,6 +147,7 @@ func _ready() -> void:
 	fists = _make_weapon(WeaponDB.FISTS, -1)
 	weapon = fists
 	weapon_data = fists.data
+	inventory.changed.connect(_on_inventory_changed)
 
 	spawn_time_msec = Time.get_ticks_msec()
 	_prev_pos = global_position
@@ -254,6 +268,102 @@ func cycle_weapon(dir: int) -> void:
 		equip_slot(order[posmod(idx + dir, order.size())])
 
 
+# --------------------------------------------------------------------------
+# Heals, boosts, armor
+# --------------------------------------------------------------------------
+
+func can_use_item(id: StringName) -> bool:
+	if is_dead or is_swimming or inventory.get_count(id) <= 0:
+		return false
+	var info := ItemDB.get_info(id)
+	match ItemDB.kind_of(id):
+		ItemDB.Kind.HEAL:
+			return health < minf(float(info.heal_cap), max_health) - 0.5
+		ItemDB.Kind.BOOST:
+			return boost < BOOST_MAX - 1.0
+	return false
+
+
+## Starts using a heal / boost (takes a few seconds, walking only).
+## Using the same item again cancels it.
+func use_item(id: StringName) -> bool:
+	if using_item == id:
+		cancel_item_use()
+		return false
+	if not can_use_item(id):
+		return false
+	weapon.cancel_reload()
+	using_item = id
+	_use_total = float(ItemDB.get_info(id).get("use_time", 3.0))
+	_use_left = _use_total
+	_play_weapon_sound(&"bandage" if ItemDB.kind_of(id) == ItemDB.Kind.HEAL else &"drink")
+	return true
+
+
+func cancel_item_use() -> void:
+	using_item = &""
+	_use_left = 0.0
+
+
+func is_using_item() -> bool:
+	return using_item != &""
+
+
+## 0..1 progress of the item being used.
+func get_use_progress() -> float:
+	if using_item == &"":
+		return 0.0
+	return 1.0 - _use_left / maxf(_use_total, 0.01)
+
+
+## The most sensible heal for the current health (quick heal key), or &"".
+func pick_heal() -> StringName:
+	var order: Array[StringName] = []
+	if health < 55.0:
+		order = [&"first_aid", &"bandage", &"medkit"]
+	elif health < 75.0:
+		order = [&"bandage", &"first_aid", &"medkit"]
+	else:
+		order = [&"medkit"]
+	for id in order:
+		if can_use_item(id):
+			return id
+	return &""
+
+
+func _update_items(delta: float) -> void:
+	if boost > 0.0:
+		boost = maxf(boost - BOOST_DECAY * delta, 0.0)
+		if health < max_health:
+			health = minf(health + (0.25 + boost * 0.012) * delta, max_health)
+	if using_item == &"":
+		return
+	if is_swimming or is_sprinting or input_fire or input_aim or weapon.is_reloading():
+		cancel_item_use()
+		return
+	_use_left -= delta
+	if _use_left <= 0.0:
+		var id := using_item
+		using_item = &""
+		if inventory.remove(id, 1) <= 0:
+			return
+		var info := ItemDB.get_info(id)
+		if ItemDB.kind_of(id) == ItemDB.Kind.HEAL:
+			var cap := minf(float(info.heal_cap), max_health)
+			health = maxf(health, minf(health + float(info.heal), cap))
+		else:
+			boost = minf(boost + float(info.boost), BOOST_MAX)
+		_play_weapon_sound(&"ui_click")
+
+
+func _on_inventory_changed() -> void:
+	var worn := [inventory.helmet, inventory.vest]
+	if worn != _worn:
+		_worn = worn
+		if model != null:
+			model.set_armor(inventory.helmet, inventory.vest)
+
+
 ## Empties weapons and inventory (after the death drop).
 func clear_loadout() -> void:
 	for k in SLOT_COUNT:
@@ -283,6 +393,7 @@ func is_switching_weapon() -> bool:
 
 
 func _equip(slot: int) -> void:
+	cancel_item_use()
 	if weapon != null:
 		weapon.cancel_reload()
 	active_slot = slot
@@ -358,6 +469,7 @@ func _physics_process(delta: float) -> void:
 	_update_swimming()
 	_update_movement(delta)
 	_update_weapon(delta)
+	_update_items(delta)
 	# The body never rotates; only the visual model turns toward the aim.
 	model.rotation.y = lerp_angle(model.rotation.y, aim_yaw, clampf(delta * 20.0, 0.0, 1.0))
 	_curr_pos = global_position
@@ -387,6 +499,10 @@ func _update_movement(delta: float) -> void:
 		speed = WALK_SPEED
 	if input_aim and not is_sprinting:
 		speed *= weapon_data.ads_move_factor
+	if using_item != &"":
+		speed = minf(speed, WALK_SPEED)
+	elif boost > 60.0:
+		speed *= 1.06
 	if input_move.y < -0.1:
 		speed *= 0.8
 	# Wading through shallow water is slower.
@@ -607,9 +723,18 @@ func apply_damage(info: DamageInfo) -> void:
 		_die(info)
 
 
-## Hook for armor (phase 2: helmet reduces HEAD damage, vest reduces TORSO).
+## Helmet reduces HEAD damage, vest reduces TORSO / explosion damage.
 func _modify_incoming_damage(info: DamageInfo) -> float:
-	return info.amount
+	info.raw_amount = info.amount
+	if info.ignore_armor:
+		return info.amount
+	var result := {}
+	var amount := inventory.absorb(info.part, info.amount, result)
+	if result.has("broke"):
+		armor_broken.emit(result.broke)
+		if is_player:
+			Events.loot_message.emit("%s đã bị phá hủy!" % ItemDB.display_name(result.broke))
+	return amount
 
 
 func _die(info: DamageInfo) -> void:
@@ -622,6 +747,7 @@ func _die(info: DamageInfo) -> void:
 	input_move = Vector2.ZERO
 	weapon.cancel_reload()
 	_swap_left = 0.0
+	cancel_item_use()
 	var fall_dir := info.direction if info != null else Vector3(sin(aim_yaw), 0, cos(aim_yaw))
 	model.play_death(fall_dir)
 	var attacker: GameCharacter = (info.attacker as GameCharacter) if info != null else null
@@ -647,6 +773,7 @@ func _process(delta: float) -> void:
 	model.swimming = is_swimming
 	model.reload_progress = weapon.get_reload_progress() if weapon.is_reloading() else -1.0
 	model.bolt_progress = weapon.get_bolt_progress()
+	model.using_item = using_item != &""
 	# The new weapon starts lowered and comes up while switching.
 	model.swap_amount = smoothstep(0.0, 1.0, _swap_left / SWAP_TIME)
 	model.update_effects(delta)

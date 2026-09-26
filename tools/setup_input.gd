@@ -24,6 +24,12 @@ const KEYS := {
 	"weapon_2": [KEY_2],
 	"weapon_3": [KEY_3],
 	"holster": [KEY_X],
+	"use_bandage": [KEY_4],
+	"use_first_aid": [KEY_5],
+	"use_medkit": [KEY_6],
+	"use_energy_drink": [KEY_7],
+	"use_painkiller": [KEY_8],
+	"quick_heal": [KEY_H],
 }
 const MOUSE := {
 	"fire": MOUSE_BUTTON_LEFT,

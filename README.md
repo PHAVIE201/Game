@@ -53,7 +53,9 @@ Renderer: **Forward+** (Vulkan / D3D12 / Metal). Card đồ họa rất cũ khô
 | **Lăn chuột** | Đổi sang súng kế tiếp / trước đó |
 | **X** | Cất súng (tay không, chuột trái để đấm) |
 | **F** | Nhặt món đồ đang nhìn vào (có dòng nhắc ở giữa màn hình) |
-| **Tab** | Mở / đóng túi đồ (nhặt, bỏ đồ, cầm súng bằng chuột) |
+| **Tab** | Mở / đóng túi đồ (nhặt, bỏ, dùng đồ, cầm súng bằng chuột) |
+| **H** | Hồi máu nhanh (tự chọn băng gạc / sơ cứu / hộp y tế hợp với lượng máu) |
+| **4 / 5 / 6 / 7 / 8** | Băng gạc / Bộ sơ cứu / Hộp y tế / Nước tăng lực / Thuốc giảm đau (bấm lại để hủy) |
 | **Esc** | Tạm dừng (chỉnh độ nhạy chuột, đồ họa, về menu) |
 | **F3** | Bật / tắt bảng hiệu năng (FPS, draw call, tam giác, thời gian vật lý) |
 
@@ -150,7 +152,26 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
 - **Tab** mở màn hình túi đồ: cột *Mặt đất* (đồ trong 3 m), *Balo* (thanh sức chứa, bỏ đồ), *Trang bị*
   (3 ô súng, cầm / bỏ súng, bỏ balo).
 - Khi chết, mọi thứ rơi ra quanh xác để người khác nhặt.
-- Người chơi bắt đầu chỉ với súng lục P1 + 30 viên và phải tự đi nhặt. Bot tạm thời vẫn xuất phát với một
+- Người chơi bắt đầu chỉ với súng lục P1 + 30 viên và phải tự đi nhặt.
+
+**2.3 Giáp, mũ, hồi máu, tăng lực** ✔
+- **Mũ** (giảm sát thương vào đầu) và **áo giáp** (giảm sát thương vào thân và sát thương nổ), mỗi loại 3 cấp:
+  giảm 30% / 40% / 55%. Giáp mòn dần theo sát thương hứng chịu; mũ / giáp hết độ bền thì vỡ (có thông báo).
+  Tay chân không được bảo vệ. Mũ và giáp hiện trên người nhân vật (1 mesh mỗi món, bám theo xương).
+- Đồ hồi máu (dùng mất vài giây, chỉ đi bộ được, bắn / ngắm / chạy nhanh / nạp đạn / đổi súng thì bị hủy):
+
+  | Đồ | Tác dụng | Thời gian |
+  |---|---|---|
+  | Băng gạc | +10 máu, tối đa 75 | 4 giây |
+  | Bộ sơ cứu | hồi lên 75 | 6 giây |
+  | Hộp y tế | hồi đầy 100 | 8 giây |
+  | Nước tăng lực | +40 boost | 4 giây |
+  | Thuốc giảm đau | +60 boost | 6 giây |
+- **Thanh boost** (4 đoạn màu cam trên thanh máu) giảm dần 0.6/giây; khi còn boost thì hồi máu liên tục
+  (nhanh hơn khi boost cao), trên 60 thì chạy nhanh hơn 6%. Thanh máu có vạch 75 (giới hạn của băng gạc / sơ cứu).
+- HUD: ô Mũ / Giáp / Balo cạnh thanh máu (cấp + độ bền), vòng tiến độ khi đang dùng đồ.
+- Tỉ lệ đồ trong nhà: súng 26, đạn 26, hồi máu 17, mũ 7, giáp 7, tăng lực 7, balo 6. Bot tạm thời xuất phát
+  với giáp / mũ cấp 1–2 ngẫu nhiên (rơi ra khi chết). Bot tạm thời vẫn xuất phát với một
   súng chính ngẫu nhiên và đạn không giới hạn (bot biết nhặt đồ ở giai đoạn 3); khi chết bot rơi súng và
   vài hộp đạn.
 
