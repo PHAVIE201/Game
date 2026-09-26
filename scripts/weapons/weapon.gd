@@ -14,6 +14,8 @@ signal fire_mode_changed(mode: int)
 
 var data: WeaponData
 var ammo := 0
+## Mounted scope item id (&"" = iron sights).
+var scope := &""
 var fire_mode: int = WeaponData.FireMode.AUTO
 ## Extra spread (degrees) from sustained fire.
 var bloom := 0.0
@@ -35,6 +37,10 @@ func _init(p_data: WeaponData, mag_ammo := -1) -> void:
 	if not data.fire_modes.is_empty():
 		fire_mode = data.fire_modes[0]
 	_rng.randomize()
+
+
+func can_mount(scope_id: StringName) -> bool:
+	return ItemDB.level_of(scope_id) <= data.max_scope and ItemDB.level_of(scope_id) > 0
 
 
 func uses_ammo() -> bool:

@@ -46,7 +46,8 @@ Renderer: **Forward+** (Vulkan / D3D12 / Metal). Card đồ họa rất cũ khô
 | **Z** | Nằm / đứng |
 | **Chuột** | Xoay camera |
 | **Chuột trái** | Bắn |
-| **Chuột phải** (giữ) | Ngắm (zoom qua vai, đạn chụm hơn, đi chậm hơn) |
+| **Chuột phải** (giữ) | Ngắm (zoom qua vai; nếu súng có ống ngắm thì nhìn qua ống ngắm, góc nhìn thứ nhất) |
+| **Shift** khi đang ngắm qua ống | Nín thở: giảm rung tay trong khoảng 5 giây |
 | **R** | Nạp đạn (bắn khi hết đạn cũng tự nạp) |
 | **B** | Đổi chế độ bắn: tự động / phát một |
 | **1 / 2 / 3** | Cầm súng chính 1 / súng chính 2 / súng lục |
@@ -212,7 +213,22 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
 - **Bot**: trạng thái mới **Parachute**: chọn chỗ đáp cạnh một ngôi nhà (ưu tiên làng) trong khoảng 520 m từ
   đường bay (thỉnh thoảng chọn chỗ vắng), tính thời điểm nhảy, lao / mở dù sớm tùy khoảng cách, đáp trúng chỗ
   chọn (sai lệch trung vị vài mét).
-- Dòng nhắc giữa màn hình: số người còn trên máy bay, độ cao, phím mở dù. Bot tạm thời vẫn xuất phát với một
+- Dòng nhắc giữa màn hình: số người còn trên máy bay, độ cao, phím mở dù.
+
+**2.6 Ống ngắm** ✔
+- 4 loại: **chấm đỏ** (×1.3), **2x**, **4x**, **8x** (model sinh bằng code, gắn lên ray súng, nằm được trên đất).
+  Súng lục và súng săn chỉ gắn được chấm đỏ; tiểu liên tới 4x; súng trường / DMR / bắn tỉa gắn được tất cả.
+- Nhặt ống ngắm: tự gắn lên súng đang cầm (hoặc súng khác) nếu súng đó chưa có ống; nếu không thì vào balo
+  (nặng 5). Trong túi đồ: nút **Gắn 1/2/3** và **Tháo ống**. Súng rơi ra đất vẫn giữ nguyên ống ngắm.
+- **Ngắm qua ống** (chuột phải khi súng có ống): camera chuyển vào mắt nhân vật (góc nhìn thứ nhất), FOV theo
+  độ phóng đại, ẩn thân mình; chấm đỏ chỉ có chấm + vành; 2x trở lên có mặt nạ đen tròn, lưới ngắm duplex
+  (4x, 8x có chấm mil để ước lượng đạn rơi).
+- **Rung tay** tỉ lệ với độ phóng đại, giảm khi ngồi / nằm, tăng khi di chuyển. **Shift** để nín thở (5 giây,
+  hồi dần), hết hơi thì rung mạnh hơn. Độ nhạy chuột tự giảm theo FOV.
+- HUD hiện ống ngắm trong danh sách súng ("K7 Kestrel [4x]"). Tỉ lệ loot: ống ngắm 8% các điểm
+  (chấm đỏ 40, 2x 30, 4x 20, 8x 10).
+- Bot mang DMR / súng bắn tỉa có sẵn 4x hoặc 8x, 40% bot súng trường có ống; ống ngắm giúp bot bắn chính xác
+  hơn ở xa (sai số ×0.75 khi > 60 m). Bot tạm thời vẫn xuất phát với một
   súng chính ngẫu nhiên và đạn không giới hạn (bot biết nhặt đồ ở giai đoạn 3); khi chết bot rơi súng và
   vài hộp đạn.
 

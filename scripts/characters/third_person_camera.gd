@@ -11,6 +11,8 @@ const ADS_DISTANCE := 1.55
 const HIP_SHOULDER := 0.6
 const ADS_SHOULDER := 0.68
 const PIVOT_HEIGHTS := [1.55, 1.1, 0.5]
+## Seconds the breath can be held while scoped (Shift).
+const BREATH_MAX := 5.0
 
 @export var target_path: NodePath = ^".."
 
@@ -25,6 +27,15 @@ var _death_orbit := 0.0
 var _ray := PhysicsRayQueryParameters3D.new()
 var _distance := HIP_DISTANCE
 var _wind: AudioStreamPlayer
+## True while looking through a magnified scope / red dot (first person).
+var scoped := false
+## 0..1 breath left for holding it (HUD).
+var breath := 1.0
+var holding_breath := false
+var _scope_t := 0.0
+var _sway_time := 0.0
+var _breath_left := BREATH_MAX
+var _model_hidden := false
 
 
 func _ready() -> void:
@@ -44,11 +55,34 @@ func _ready() -> void:
 	camera.current = true
 	_ray.collision_mask = Layers.WORLD
 	Game.camera = camera
+	Game.camera_rig = self
 	_wind = AudioStreamPlayer.new()
 	_wind.stream = Sfx.get_loop(&"wind")
 	_wind.volume_db = -60.0
 	add_child(_wind)
 	target.weapon_fired.connect(_on_fired)
+
+
+## Hand sway while scoped (degrees); Shift holds the breath for a few seconds.
+func _update_sway(delta: float, zoom: float) -> Vector2:
+	_sway_time += delta
+	var amp := 0.09 * zoom
+	match target.stance:
+		GameCharacter.Stance.CROUCH:
+			amp *= 0.6
+		GameCharacter.Stance.PRONE:
+			amp *= 0.3
+	if Vector2(target.velocity.x, target.velocity.z).length() > 0.5:
+		amp *= 2.0
+	holding_breath = target.input_sprint and _breath_left > 0.0
+	if holding_breath:
+		_breath_left = maxf(_breath_left - delta, 0.0)
+		amp *= 0.12
+	else:
+		_breath_left = minf(_breath_left + delta * 0.4, BREATH_MAX)
+		if _breath_left < 1.0:
+			amp *= 1.6   # out of breath
+	return Vector2(sin(_sway_time * 0.9) + 0.4 * sin(_sway_time * 2.3), 0.7 * sin(_sway_time * 1.3 + 1.0)) * amp
 
 
 ## Rushing air while falling / gliding.
@@ -110,6 +144,26 @@ func _process(delta: float) -> void:
 
 	var yaw := target.aim_yaw + deg_to_rad(target.weapon.recoil_yaw)
 	var pitch := target.aim_pitch + deg_to_rad(target.weapon.recoil_pitch)
+
+	# Scope: first-person view through the sight with a little sway.
+	var zoom := target.get_scope_zoom()
+	var want_scope := want_ads and zoom > 1.01 and not target.is_in_air() and not target.is_swimming \
+		and not target.is_switching_weapon() and not target.weapon.is_reloading()
+	_scope_t = move_toward(_scope_t, 1.0 if want_scope else 0.0, delta * 6.0)
+	scoped = _scope_t > 0.55
+	if scoped:
+		var sway := _update_sway(delta, zoom)
+		yaw += deg_to_rad(sway.x)
+		pitch += deg_to_rad(sway.y)
+	else:
+		holding_breath = false
+		_breath_left = minf(_breath_left + delta * 0.6, BREATH_MAX)
+	breath = _breath_left / BREATH_MAX
+	var hide_body := scoped and not target.is_dead
+	if hide_body != _model_hidden:
+		_model_hidden = hide_body
+		# The camera sits in the head: do not draw our own body.
+		target.model.visible = not hide_body
 	var distance := lerpf(HIP_DISTANCE, ADS_DISTANCE, ease_t)
 	if air_distance > 0.0:
 		distance = air_distance
@@ -133,10 +187,16 @@ func _process(delta: float) -> void:
 	if not hit.is_empty():
 		pivot = head.lerp(hit.position, 0.6)
 
+	if scoped:
+		pivot = target.get_eye_position() + target.model.position + yaw_basis * Vector3(0, 0.02, -0.1)
+		distance = 0.0
+		_distance = 0.0
 	global_transform = Transform3D(yaw_basis * Basis(Vector3.RIGHT, pitch), pivot)
 	spring.spring_length = distance
 	var ads_fov := target.weapon_data.ads_fov if target.weapon_data != null else 55.0
 	camera.fov = lerpf(Settings.fov, ads_fov, ease_t)
+	if scoped:
+		camera.fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(Settings.fov) * 0.5) / zoom))
 
 	camera.far = 3000.0 if target.is_in_air() else 1700.0
 

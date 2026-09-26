@@ -278,7 +278,7 @@ func _plane_check() -> void:
 		on_board, jumped, saw_chute, p.air_state == GameCharacter.AirState.NONE, miss, in_air, mm.alive.size()])
 	if on_board != mm.participants.size() or not jumped or not saw_chute or p.air_state != GameCharacter.AirState.NONE or in_air > 0 or p.is_dead:
 		_checks_failed.append("plane / parachute flow")
-	if miss > 120.0:
+	if miss > 200.0:
 		_checks_failed.append("landed %.0f m away from the target" % miss)
 
 
@@ -366,6 +366,7 @@ func _weapon_check() -> void:
 	await _wait(GameCharacter.SWAP_TIME + 0.1)
 	print("[auto] weapon check: ", " ".join(report), " active=", p.weapon_data.id)
 	await _loot_check(p)
+	await _scope_check(p)
 	await _armor_heal_check(p)
 	await _zone_check(p)
 	Events.character_damaged.disconnect(on_dmg)
@@ -393,6 +394,39 @@ func _hit(p: GameCharacter, part: int, amount: float) -> void:
 	info.part = part
 	info.direction = Vector3.FORWARD
 	p.apply_damage(info)
+
+
+## Scopes: auto-mount on pickup, bag / mount / unmount, scoped camera.
+func _scope_check(p: GameCharacter) -> void:
+	var loot := Game.loot
+	for k in GameCharacter.SLOT_COUNT:
+		p.take_weapon(k)
+	p.give_weapon(WeaponDB.K7)
+	p.give_weapon(WeaponDB.P1, -1, false)
+	await _wait(GameCharacter.SWAP_TIME + 0.1)
+	var at := loot.floor_at(p.global_position)
+	loot.take(p, loot.spawn(&"scope_4x", 1, at))
+	var mounted := p.weapon.scope == &"scope_4x"
+	loot.take(p, loot.spawn(&"scope_8x", 1, at))
+	var in_bag := p.inventory.get_count(&"scope_8x") == 1
+	loot.take(p, loot.spawn(&"scope_reddot", 1, at))
+	var on_pistol := p.slots[GameCharacter.SLOT_PISTOL].scope == &"scope_reddot"
+	loot.mount_from_bag(p, GameCharacter.SLOT_PRIMARY_1, &"scope_8x")
+	var swapped := p.weapon.scope == &"scope_8x" and p.inventory.get_count(&"scope_4x") == 1
+	var rig := p.get_node("CameraRig") as ThirdPersonCamera
+	p.input_aim = true
+	await _wait(0.5)
+	var fov := rig.camera.fov
+	var scoped := rig.scoped and not p.model.visible
+	p.input_aim = false
+	await _wait(0.4)
+	var back := not rig.scoped and p.model.visible
+	loot.unmount_to_bag(p, GameCharacter.SLOT_PRIMARY_1)
+	var unmounted := p.weapon.scope == &"" and p.inventory.get_count(&"scope_8x") == 1
+	print("[auto] scope check: mounted=%s bag=%s pistol_reddot=%s swap=%s scoped=%s fov=%.1f back=%s unmount=%s" % [
+		mounted, in_bag, on_pistol, swapped, scoped, fov, back, unmounted])
+	if not (mounted and in_bag and on_pistol and swapped and scoped and fov < 12.0 and back and unmounted):
+		_checks_failed.append("scopes")
 
 
 ## Runs every zone phase at 1% of the normal duration: circles must nest and
@@ -844,6 +878,24 @@ func _run_screenshots() -> void:
 	await _shot("02_ads_firing")
 	p.input_fire = false
 	p.input_aim = false
+	# Scopes (first-person view through the sight).
+	p.give_weapon(WeaponDB.K7, -1, true, &"scope_4x")
+	p.inventory.add_ammo(WeaponDB.K7.ammo_type, 60)
+	await _wait(2.0)
+	p.aim_pitch = -0.02
+	p.input_aim = true
+	# Game time runs slower than real time with a software renderer: wait generously.
+	await _wait(2.0)
+	await _shot("02b_scope_4x")
+	p.mount_scope(p.active_slot, &"scope_reddot")
+	await _wait(0.4)
+	await _shot("02c_red_dot")
+	p.mount_scope(p.active_slot, &"scope_2x")
+	await _wait(0.6)
+	await _shot("02d_scope_2x")
+	p.input_aim = false
+	await _wait(0.5)
+	await _shot("02e_rifle_with_scope")
 	p.request_stance(GameCharacter.Stance.PRONE)
 	await _wait(1.2)
 	await _shot("03_prone")

@@ -240,6 +240,42 @@ static func _build_pistol() -> Dictionary:
 	}
 
 
+## Scope mesh, origin = bottom of its mount (sits on the gun's "rail").
+static func get_scope_mesh(id: StringName) -> ArrayMesh:
+	var key := StringName("scope:" + String(id))
+	if _cache.has(key):
+		return _cache[key]
+	var mb := MeshBuilder.new()
+	var body := Color(0.13, 0.13, 0.14)
+	var lens := Color(0.35, 0.6, 0.85)
+	var zoom := ItemDB.zoom_of(id)
+	# Mount
+	mb.add_box(Vector3(0, 0.012, 0), Vector3(0.03, 0.024, 0.05), body)
+	if id == &"scope_reddot":
+		mb.add_box(Vector3(0, 0.035, 0), Vector3(0.045, 0.03, 0.06), body)
+		mb.add_box(Vector3(0.019, 0.07, 0), Vector3(0.007, 0.05, 0.05), body)
+		mb.add_box(Vector3(-0.019, 0.07, 0), Vector3(0.007, 0.05, 0.05), body)
+		mb.add_box(Vector3(0, 0.096, 0), Vector3(0.045, 0.007, 0.05), body)
+		mb.add_box(Vector3(0, 0.07, -0.02), Vector3(0.032, 0.045, 0.004), Color(0.9, 0.25, 0.2, 1.0))
+	else:
+		var r := 0.018 + zoom * 0.0015
+		var length := 0.08 + zoom * 0.03
+		var tube := Basis(Vector3.RIGHT, -PI * 0.5)   # frustum +Y -> gun forward (-Z)
+		mb.xform = Transform3D(tube, Vector3(0, 0.045, length * 0.5))
+		mb.add_frustum(Vector3.ZERO, r, r, length, 8, body, true, PI / 8.0)
+		# Objective bell + lens
+		mb.xform = Transform3D(tube, Vector3(0, 0.045, -length * 0.5))
+		mb.add_frustum(Vector3.ZERO, r, r * 1.35, 0.04, 8, body, true, PI / 8.0, lens)
+		mb.xform = Transform3D.IDENTITY
+		if zoom >= 4.0:
+			# Turrets
+			mb.add_box(Vector3(0, 0.045 + r + 0.01, 0), Vector3(0.02, 0.02, 0.02), body)
+			mb.add_box(Vector3(r + 0.01, 0.045, 0), Vector3(0.02, 0.02, 0.02), body)
+	var mesh := mb.commit(_mat())
+	_cache[key] = mesh
+	return mesh
+
+
 ## Star-shaped muzzle flash (crossed quads, additive, unshaded).
 static func get_flash_mesh() -> ArrayMesh:
 	if _flash_mesh != null:

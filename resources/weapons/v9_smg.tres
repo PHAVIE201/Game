@@ -37,6 +37,7 @@ prone_spread_factor = 0.65
 recoil_vertical = 0.42
 recoil_horizontal = 0.3
 recoil_recovery = 10.0
+max_scope = 3
 ads_fov = 60.0
 ads_move_factor = 0.82
 tracer_color = Color(1, 0.9, 0.5, 1)

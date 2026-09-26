@@ -63,6 +63,7 @@ var muzzle_local := Vector3.ZERO
 var skeleton: Skeleton3D
 var body_mesh: MeshInstance3D
 var gun: MeshInstance3D
+var scope_mesh: MeshInstance3D
 var flash: MeshInstance3D
 var flash_light: OmniLight3D
 ## Primary weapons carried on the back (not in the hands).
@@ -128,6 +129,12 @@ func build(outfit: Dictionary, weapon_model: StringName, use_flash_light: bool) 
 	gun.name = "Gun"
 	gun.layers = Layers.RENDER_CHARACTERS
 	add_child(gun)
+
+	scope_mesh = MeshInstance3D.new()
+	scope_mesh.name = "Scope"
+	scope_mesh.layers = Layers.RENDER_CHARACTERS
+	scope_mesh.visible = false
+	gun.add_child(scope_mesh)
 
 	flash = MeshInstance3D.new()
 	flash.name = "MuzzleFlash"
@@ -244,6 +251,14 @@ func set_weapon(model_id: StringName) -> void:
 	if flash_light != null:
 		flash_light.position = muzzle_local + Vector3(0, 0, -0.1)
 	gun.visible = _armed and not _dead
+
+
+## Shows a scope on the rail of the gun in the hands (&"" = none).
+func set_scope(scope_id: StringName) -> void:
+	scope_mesh.visible = scope_id != &"" and _armed
+	if scope_mesh.visible:
+		scope_mesh.mesh = WeaponModels.get_scope_mesh(scope_id)
+		scope_mesh.position = _gun_model.get("rail", Vector3(0, 0.1, -0.1))
 
 
 ## Shows up to two primary guns slung on the back.

@@ -56,6 +56,8 @@ static func _build(id: StringName) -> ArrayMesh:
 			_heal(mb, id, col)
 		ItemDB.Kind.BOOST:
 			_boost(mb, id, col)
+		ItemDB.Kind.SCOPE:
+			return WeaponModels.get_scope_mesh(id)
 		_:
 			mb.add_box(Vector3(0, 0.1, 0), Vector3(0.2, 0.2, 0.2), col)
 	return mb.commit(_mat())

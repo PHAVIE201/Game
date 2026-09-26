@@ -70,6 +70,8 @@ enum Category { RIFLE, SMG, SHOTGUN, DMR, SNIPER, PISTOL, MELEE }
 @export var recoil_recovery := 9.0
 
 @export_group("Handling")
+## Best scope level that can be mounted (1 = red dot ... 4 = 8x, 0 = none).
+@export var max_scope := 4
 @export var ads_fov := 55.0
 @export var ads_move_factor := 0.7
 @export var tracer_color := Color(1.0, 0.8, 0.35)

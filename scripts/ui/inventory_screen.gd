@@ -83,6 +83,7 @@ func _process(delta: float) -> void:
 		for w in p.slots:
 			key.append(w.get_instance_id() if w != null else 0)
 			key.append(w.ammo if w != null else 0)
+			key.append(w.scope if w != null else &"")
 		if key != _ground_key:
 			_ground_key = key
 			_dirty = true
@@ -232,6 +233,12 @@ func _refresh() -> void:
 		var item_id: StringName = id
 		var n := inv.get_count(item_id)
 		var actions := []
+		if ItemDB.kind_of(item_id) == ItemDB.Kind.SCOPE:
+			for k in GameCharacter.SLOT_COUNT:
+				var w := p.slots[k]
+				var slot := k
+				if w != null and w.can_mount(item_id):
+					actions.append(["Gắn %d" % (k + 1), func(): Game.loot.mount_from_bag(p, slot, item_id)])
 		if ItemDB.is_consumable(item_id):
 			actions.append(["Dùng", func():
 				if p.use_item(item_id):
@@ -252,10 +259,14 @@ func _refresh() -> void:
 			continue
 		var reserve := inv.get_ammo(w.data.ammo_type)
 		var text := "%d. %s  %d/%d" % [k + 1, w.data.display_name, w.ammo, reserve]
+		if w.scope != &"":
+			text += "  + " + ItemDB.scope_tag(w.scope)
 		var col := Color(1.0, 0.85, 0.4) if k == p.active_slot else Color.WHITE
 		var actions := []
 		if k != p.active_slot:
 			actions.append(["Cầm", func(): p.equip_slot(slot)])
+		if w.scope != &"":
+			actions.append(["Tháo ống", func(): Game.loot.unmount_to_bag(p, slot)])
 		actions.append(["Bỏ", func(): Game.loot.drop_weapon(p, slot)])
 		_row(_equip_box, text, col, actions)
 	var sep := HSeparator.new()

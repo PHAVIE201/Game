@@ -399,6 +399,8 @@ func get_aim_point(delta: float) -> Vector3:
 		err *= 1.0 + Vector2(target.velocity.x, target.velocity.z).length() * 0.1
 		if time - last_damaged_time < 0.6:
 			err *= 1.8   # flinch when hit
+		if dist > 60.0 and character.get_scope_zoom() >= 2.0:
+			err *= 0.75   # a scope helps at range
 		# Normal distribution around the target, sigma = angular error * distance.
 		var sigma := dist * tan(err)
 		_aim_offset = Vector3(rng.randfn(0.0, sigma), rng.randfn(0.0, sigma * 0.8), rng.randfn(0.0, sigma))

@@ -20,7 +20,7 @@ const VIEW_RANGE := 85.0
 const SPOT_CHANCE := 0.82
 
 ## Relative weights of what a loot spot contains.
-const SPOT_TABLE := {"weapon": 26.0, "ammo": 26.0, "backpack": 6.0, "helmet": 7.0, "vest": 7.0, "heal": 17.0, "boost": 7.0}
+const SPOT_TABLE := {"weapon": 25.0, "ammo": 24.0, "backpack": 6.0, "helmet": 7.0, "vest": 7.0, "heal": 16.0, "boost": 7.0, "scope": 8.0}
 const WEAPON_WEIGHTS := {&"k7": 22.0, &"v9": 22.0, &"b12": 18.0, &"d3": 9.0, &"r8": 6.0, &"p1": 23.0}
 const AMMO_WEIGHTS := {&"ammo_rifle": 35.0, &"ammo_smg": 30.0, &"ammo_shotgun": 15.0, &"ammo_sniper": 20.0}
 const BACKPACK_WEIGHTS := {&"backpack_1": 60.0, &"backpack_2": 30.0, &"backpack_3": 10.0}
@@ -28,6 +28,7 @@ const HELMET_WEIGHTS := {&"helmet_1": 55.0, &"helmet_2": 33.0, &"helmet_3": 12.0
 const VEST_WEIGHTS := {&"vest_1": 55.0, &"vest_2": 33.0, &"vest_3": 12.0}
 const HEAL_WEIGHTS := {&"bandage": 55.0, &"first_aid": 32.0, &"medkit": 13.0}
 const BOOST_WEIGHTS := {&"energy_drink": 65.0, &"painkiller": 35.0}
+const SCOPE_WEIGHTS := {&"scope_reddot": 40.0, &"scope_2x": 30.0, &"scope_4x": 20.0, &"scope_8x": 10.0}
 
 
 class Pickup:
@@ -38,6 +39,8 @@ class Pickup:
 	var mag_ammo := 0
 	## Helmet / vest: remaining durability (< 0 = new).
 	var durability := -1.0
+	## Weapons: mounted scope.
+	var scope := &""
 	var pos := Vector3.ZERO
 	var yaw := 0.0
 	var node: MeshInstance3D
@@ -51,6 +54,8 @@ class Pickup:
 		if durability >= 0.0:
 			var full := float(ItemDB.get_info(id).get("durability", 100.0))
 			text += " (%d%%)" % roundi(100.0 * durability / full)
+		if scope != &"":
+			text += " + " + ItemDB.scope_tag(scope)
 		return text
 
 
@@ -117,6 +122,8 @@ func _spawn_spot(at: Vector3, rng: RandomNumberGenerator) -> void:
 			spawn(id, ItemDB.stack_of(id), at, yaw)
 		"boost":
 			spawn(_pick(BOOST_WEIGHTS, rng), 1, at, yaw)
+		"scope":
+			spawn(_pick(SCOPE_WEIGHTS, rng), 1, at, yaw)
 
 
 static func _pick(table: Dictionary, rng: RandomNumberGenerator) -> Variant:
@@ -259,11 +266,33 @@ func take(c: GameCharacter, p: Pickup, amount := -1) -> int:
 		ItemDB.Kind.WEAPON:
 			var data := WeaponDB.get_weapon(id)
 			var mag := p.mag_ammo
+			var scope := p.scope
 			remove(p)
-			var old := c.give_weapon(data, mag, not c.is_armed())
+			var old := c.give_weapon(data, mag, not c.is_armed(), scope)
 			if old != null:
-				spawn(old.data.id, 1, drop_position(c, 0), c.aim_yaw + PI * 0.5, old.ammo)
+				_spawn_weapon(old, drop_position(c, 0), c.aim_yaw + PI * 0.5)
 			_emit_loot(c, "Đã nhặt " + data.display_name)
+			return Take.OK
+		ItemDB.Kind.SCOPE:
+			# Mount it right away on a gun without a scope (the one in the hands first).
+			var order: Array[int] = []
+			if c.active_slot >= 0:
+				order.append(c.active_slot)
+			for k in GameCharacter.SLOT_COUNT:
+				if k != c.active_slot:
+					order.append(k)
+			for k in order:
+				var w := c.slots[k]
+				if w != null and w.scope == &"" and w.can_mount(id):
+					remove(p)
+					c.mount_scope(k, id)
+					_emit_loot(c, "Đã gắn %s lên %s" % [ItemDB.display_name(id), w.data.display_name])
+					return Take.OK
+			if c.inventory.add(id, 1) <= 0:
+				_emit_loot(c, "Túi đồ đã đầy")
+				return Take.FULL
+			remove(p)
+			_emit_loot(c, "Đã nhặt " + ItemDB.display_name(id))
 			return Take.OK
 		ItemDB.Kind.HELMET, ItemDB.Kind.VEST:
 			var dur := p.durability
@@ -311,7 +340,31 @@ func drop_item(c: GameCharacter, id: StringName, amount: int) -> void:
 func drop_weapon(c: GameCharacter, slot: int) -> void:
 	var w := c.take_weapon(slot)
 	if w != null:
-		spawn(w.data.id, 1, drop_position(c, slot), c.aim_yaw + PI * 0.5, w.ammo)
+		_spawn_weapon(w, drop_position(c, slot), c.aim_yaw + PI * 0.5)
+
+
+## A weapon on the ground keeps its magazine and scope.
+func _spawn_weapon(w: Weapon, pos: Vector3, yaw: float) -> Pickup:
+	var p := spawn(w.data.id, 1, pos, yaw, w.ammo)
+	p.scope = w.scope
+	return p
+
+
+## Mounts a scope from the backpack on a slot's weapon (inventory screen).
+func mount_from_bag(c: GameCharacter, slot: int, scope_id: StringName) -> void:
+	var w := c.slots[slot]
+	if w == null or not w.can_mount(scope_id) or c.inventory.remove(scope_id, 1) <= 0:
+		return
+	var old := c.mount_scope(slot, scope_id)
+	if old != &"" and c.inventory.add(old, 1) <= 0:
+		spawn(old, 1, drop_position(c, 3), c.aim_yaw)
+
+
+## Takes the scope off a slot's weapon into the backpack (or the ground).
+func unmount_to_bag(c: GameCharacter, slot: int) -> void:
+	var old := c.unmount_scope(slot)
+	if old != &"" and c.inventory.add(old, 1) <= 0:
+		spawn(old, 1, drop_position(c, 3), c.aim_yaw)
 
 
 func drop_backpack(c: GameCharacter) -> void:
@@ -339,7 +392,7 @@ func drop_everything(c: GameCharacter) -> void:
 	for slot in GameCharacter.SLOT_COUNT:
 		var w := c.slots[slot]
 		if w != null:
-			spawn(w.data.id, 1, drop_position(c, k, 0.9), c.aim_yaw + k, w.ammo)
+			_spawn_weapon(w, drop_position(c, k, 0.9), c.aim_yaw + k)
 			k += 1
 	for id in c.inventory.items.keys():
 		var n := c.inventory.get_count(id)

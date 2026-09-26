@@ -53,7 +53,11 @@ func _draw() -> void:
 	if p == null or not is_instance_valid(p) or p.is_dead:
 		return
 	var c := Vector2.ZERO
-	if p.weapon_data.is_melee():
+	var rig := Game.camera_rig as ThirdPersonCamera
+	var scoped := rig != null and is_instance_valid(rig) and rig.scoped
+	if scoped:
+		pass   # the scope overlay has its own reticle
+	elif p.weapon_data.is_melee():
 		draw_circle(c, 3.0, OUTLINE)
 		draw_circle(c, 2.0, COLOR)
 	elif p.weapon_data.pellets > 1 and not p.is_sprinting and not p.is_swimming:

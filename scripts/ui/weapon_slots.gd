@@ -15,7 +15,7 @@ func _process(_delta: float) -> void:
 	var st := [p.active_slot]
 	for w in p.slots:
 		if w != null:
-			st.append([w.data.display_name, w.ammo])
+			st.append([w.data.display_name, w.ammo, w.scope])
 		else:
 			st.append(null)
 	if st != _state:
@@ -42,5 +42,8 @@ func _draw() -> void:
 		if weapon == null:
 			draw_string(font, Vector2(32, y + 19), "—", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 1, 1, 0.35))
 			continue
-		draw_string(font, Vector2(32, y + 19), weapon.data.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
+		var label := weapon.data.display_name
+		if weapon.scope != &"":
+			label += "  [" + ItemDB.scope_tag(weapon.scope) + "]"
+		draw_string(font, Vector2(32, y + 19), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
 		draw_string(font, Vector2(w - 70, y + 19), str(weapon.ammo), HORIZONTAL_ALIGNMENT_RIGHT, 60, 16, col)

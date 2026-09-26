@@ -134,7 +134,14 @@ func _give_starting_kit(c: GameCharacter) -> void:
 	# Bots cannot loot yet: they start armed, with endless ammo.
 	c.inventory.unlimited = true
 	var main := primaries[_weighted_pick(weights)]
-	c.give_weapon(main)
+	var scope := &""
+	match main.category:
+		WeaponData.Category.DMR, WeaponData.Category.SNIPER:
+			scope = [&"scope_4x", &"scope_4x", &"scope_8x"][_rng.randi() % 3]
+		WeaponData.Category.RIFLE:
+			if _rng.randf() < 0.4:
+				scope = [&"scope_reddot", &"scope_2x", &"scope_4x"][_rng.randi() % 3]
+	c.give_weapon(main, -1, true, scope)
 	c.inventory.add_ammo(main.ammo_type, 9999)
 	if _rng.randf() < 0.5:
 		c.give_weapon(WeaponDB.P1, -1, false)

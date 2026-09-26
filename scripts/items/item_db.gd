@@ -36,6 +36,12 @@ const ITEMS := {
 	&"medkit": {"name": "Hộp y tế", "kind": Kind.HEAL, "heal": 100.0, "heal_cap": 100.0, "use_time": 8.0, "weight": 20.0, "stack": 1, "color": Color(0.85, 0.2, 0.2)},
 	&"energy_drink": {"name": "Nước tăng lực", "kind": Kind.BOOST, "boost": 40.0, "use_time": 4.0, "weight": 4.0, "stack": 1, "color": Color(0.2, 0.75, 0.95)},
 	&"painkiller": {"name": "Thuốc giảm đau", "kind": Kind.BOOST, "boost": 60.0, "use_time": 6.0, "weight": 10.0, "stack": 1, "color": Color(0.95, 0.65, 0.2)},
+
+	# Scopes: `level` 1..4 (WeaponData.max_scope limits what fits), `zoom` = magnification.
+	&"scope_reddot": {"name": "Ống ngắm chấm đỏ", "kind": Kind.SCOPE, "level": 1, "zoom": 1.3, "weight": 5.0, "stack": 1, "color": Color(0.2, 0.2, 0.22)},
+	&"scope_2x": {"name": "Ống ngắm 2x", "kind": Kind.SCOPE, "level": 2, "zoom": 2.0, "weight": 5.0, "stack": 1, "color": Color(0.25, 0.25, 0.27)},
+	&"scope_4x": {"name": "Ống ngắm 4x", "kind": Kind.SCOPE, "level": 3, "zoom": 4.0, "weight": 5.0, "stack": 1, "color": Color(0.22, 0.26, 0.22)},
+	&"scope_8x": {"name": "Ống ngắm 8x", "kind": Kind.SCOPE, "level": 4, "zoom": 8.0, "weight": 5.0, "stack": 1, "color": Color(0.18, 0.18, 0.2)},
 }
 
 ## Heals / boosts in the order of the quick-use keys (4..8).
@@ -73,6 +79,20 @@ static func stack_of(id: StringName) -> int:
 
 static func level_of(id: StringName) -> int:
 	return int(ITEMS[id].get("level", 0)) if ITEMS.has(id) else 0
+
+
+## Magnification of a scope (1 = iron sights).
+static func zoom_of(id: StringName) -> float:
+	return float(ITEMS[id].get("zoom", 1.0)) if ITEMS.has(id) else 1.0
+
+
+## Short tag for the HUD ("4x", "chấm đỏ").
+static func scope_tag(id: StringName) -> String:
+	if id == &"":
+		return ""
+	if id == &"scope_reddot":
+		return "chấm đỏ"
+	return "%dx" % roundi(zoom_of(id))
 
 
 static func is_armor(id: StringName) -> bool:

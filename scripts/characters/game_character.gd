@@ -230,12 +230,13 @@ func slot_for(data: WeaponData) -> int:
 
 ## Adds a weapon. Returns the weapon it replaced (to drop on the ground) or null.
 ## `mag_ammo` < 0 = full magazine.
-func give_weapon(data: WeaponData, mag_ammo := -1, equip := true) -> Weapon:
+func give_weapon(data: WeaponData, mag_ammo := -1, equip := true, scope := &"") -> Weapon:
 	var slot := slot_for(data)
 	var old := slots[slot]
 	if old != null:
 		old.cancel_reload()
 	slots[slot] = _make_weapon(data, mag_ammo)
+	slots[slot].scope = scope
 	if equip or active_slot == slot or active_slot < 0:
 		_equip(slot)
 	else:
@@ -379,6 +380,37 @@ func _on_inventory_changed() -> void:
 		_worn = worn
 		if model != null:
 			model.set_armor(inventory.helmet, inventory.vest)
+
+
+## Mounts a scope on the weapon of a slot. Returns the scope it replaced.
+func mount_scope(slot: int, scope_id: StringName) -> StringName:
+	var w := slots[slot]
+	if w == null or not w.can_mount(scope_id):
+		return &""
+	var old := w.scope
+	w.scope = scope_id
+	if slot == active_slot and model != null:
+		model.set_scope(scope_id)
+	weapon_changed.emit()
+	return old
+
+
+## Removes the scope of a slot's weapon and returns it.
+func unmount_scope(slot: int) -> StringName:
+	var w := slots[slot]
+	if w == null:
+		return &""
+	var old := w.scope
+	w.scope = &""
+	if slot == active_slot and model != null:
+		model.set_scope(&"")
+	weapon_changed.emit()
+	return old
+
+
+## Magnification of the current weapon's scope (1 = none).
+func get_scope_zoom() -> float:
+	return ItemDB.zoom_of(weapon.scope) if weapon != null else 1.0
 
 
 ## Empties weapons and inventory (after the death drop).
@@ -558,6 +590,7 @@ func _equip(slot: int) -> void:
 	_bolt_sound_pending = false
 	if model != null:
 		model.set_weapon(weapon_data.model)
+		model.set_scope(weapon.scope)
 	_update_back_weapons()
 	if slot >= 0:
 		_play_weapon_sound(&"bolt")

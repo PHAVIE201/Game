@@ -17,6 +17,8 @@ var zone: ZoneManager = null
 var player: GameCharacter = null
 ## Active camera used for LOD decisions (animation, audio, etc.).
 var camera: Camera3D = null
+## The local player's camera rig (ThirdPersonCamera), for the HUD.
+var camera_rig: Node = null
 
 
 func is_active() -> bool:
@@ -33,6 +35,7 @@ func clear() -> void:
 	zone = null
 	player = null
 	camera = null
+	camera_rig = null
 
 
 ## Position used for level-of-detail distance checks (camera, or origin).

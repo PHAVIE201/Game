@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/ui/weapon_slots.gd" id="6_slots"]
 [ext_resource type="Script" path="res://scripts/ui/armor_status.gd" id="7_armor"]
 [ext_resource type="Script" path="res://scripts/ui/minimap.gd" id="8_minimap"]
+[ext_resource type="Script" path="res://scripts/ui/scope_overlay.gd" id="9_scope"]
 
 [sub_resource type="Gradient" id="vig_gradient"]
 offsets = PackedFloat32Array(0.5, 1)
@@ -64,6 +65,16 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0.15, 0.35, 1, 0)
+
+[node name="ScopeOverlay" type="Control" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("9_scope")
 
 [node name="Crosshair" type="Control" parent="Root"]
 layout_mode = 1
