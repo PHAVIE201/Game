@@ -86,6 +86,15 @@ func _build_states() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if not Prof.enabled:
+		_think(delta)
+		return
+	var t0 := Time.get_ticks_usec()
+	_think(delta)
+	Prof.add(&"bot_brain", t0)
+
+
+func _think(delta: float) -> void:
 	if character.is_dead:
 		set_physics_process(false)
 		return
@@ -145,7 +154,7 @@ func zone_urgency() -> float:
 	var dist := Vector2(pos.x, pos.z).distance_to(zone.next_center) - zone.next_radius
 	if dist <= 0.0:
 		return -1.0
-	var travel := dist / GameCharacter.RUN_SPEED
+	var travel := dist / GameCharacter.SPRINT_SPEED
 	var phase_k := clampf(zone.phase / 3.0, 0.3, 1.0)
 	return travel * 1.25 + profile.zone_margin * phase_k - zone.time_until_closed()
 
@@ -165,7 +174,12 @@ func _check_zone(delta: float) -> void:
 	if not go and not zone.is_inside_next(pos, 8.0):
 		go = zone_urgency() > 0.0
 	if go:
-		fsm.change(&"zone")
+		# Early zones hurt little: badly equipped bots loot a house on the way.
+		if zone.phase <= 1 and needs_gear() and zone_urgency() < 45.0 and not fsm.is_in(&"search") \
+				and not pick_building_to_search(true).is_empty():
+			fsm.change(&"search", {"toward_zone": true})
+		else:
+			fsm.change(&"zone")
 
 
 func _compute_lod() -> int:
@@ -407,17 +421,23 @@ func mark_searched(b: Dictionary) -> void:
 	searched[b.center] = true
 
 
-## Nearest building (inside the zone) not searched yet, or {}.
-func pick_building_to_search() -> Dictionary:
+## Nearest building (inside the zone) not searched yet, or {}. With
+## `toward_zone`, only buildings that bring us clearly closer to the next circle.
+func pick_building_to_search(toward_zone := false) -> Dictionary:
 	var pos := character.global_position
 	var zone := Game.zone
 	var best: Dictionary = {}
 	var best_d := 420.0
+	var my_zone_d := INF
+	if zone != null and zone.is_active():
+		my_zone_d = Vector2(pos.x, pos.z).distance_to(zone.next_center)
 	for b in Game.world.settlements.buildings:
 		if searched.has(b.center):
 			continue
 		var c := Vector3(b.center.x, b.floor_y, b.center.y)
 		if zone != null and zone.is_active() and not zone.is_inside(c, 15.0):
+			continue
+		if toward_zone and (b.center as Vector2).distance_to(zone.next_center) > my_zone_d - 60.0:
 			continue
 		var d := pos.distance_to(c) * rng.randf_range(0.85, 1.15)
 		if d < best_d:
@@ -469,17 +489,34 @@ func clear_target() -> void:
 
 
 ## Landing spot for the parachute: next to a building (loot!) not too far
-## from the flight line, towns more likely than lone farms.
+## from the flight line. Bigger buildings and towns are more attractive,
+## spots other bots already picked much less (except for hot-droppers).
 func choose_drop_target(plane: AirPlane) -> Vector3:
 	var world := Game.world
+	var claims: Dictionary = Game.match_manager.drop_claims if Game.match_manager != null else {}
 	var candidates: Array[Vector3] = []
 	var weights: Array[float] = []
+	var keys: Array[Vector2] = []
 	for b in world.settlements.buildings:
 		var c := Vector3(b.center.x, b.floor_y, b.center.y)
-		if plane.lateral_distance(c) > 520.0:
+		var lateral := plane.lateral_distance(c)
+		if lateral > 650.0:
 			continue
+		var w := 1.4 if b.town != "" else 1.0
+		match int(b.type):
+			Settlements.BType.WAREHOUSE:
+				w *= 1.6
+			Settlements.BType.LONGHOUSE:
+				w *= 1.3
+			Settlements.BType.SHED:
+				w *= 0.4
+		# Closer to the flight line = faster landing.
+		w *= 1.2 - lateral / 1000.0
+		var n := _claims_near(claims, b.center)
+		w = w * (1.0 + n * 0.8) if profile.hot_dropper else w / (1.0 + n * n * 1.5)
 		candidates.append(c)
-		weights.append(1.5 if b.town != "" else 1.0)
+		weights.append(w)
+		keys.append(b.center)
 	if candidates.is_empty() or rng.randf() < 0.08:
 		# A quiet spot in the countryside.
 		for k in 30:
@@ -494,14 +531,26 @@ func choose_drop_target(plane: AirPlane) -> Vector3:
 		total += w
 	var r := rng.randf() * total
 	var pick := candidates[0]
+	var key := keys[0]
 	for k in candidates.size():
 		r -= weights[k]
 		if r <= 0.0:
 			pick = candidates[k]
+			key = keys[k]
 			break
+	claims[key] = int(claims.get(key, 0)) + 1
 	# Land next to the building, not on its roof.
 	var ang := rng.randf() * TAU
 	return pick + Vector3(cos(ang), 0.0, sin(ang)) * rng.randf_range(9.0, 14.0)
+
+
+## Bots that already chose a building within 40 m of `center`.
+static func _claims_near(claims: Dictionary, center: Vector2) -> int:
+	var n := 0
+	for k: Vector2 in claims:
+		if k.distance_squared_to(center) < 40.0 * 40.0:
+			n += int(claims[k])
+	return n
 
 
 ## Random walkable destination inside the safe zone, biased toward towns

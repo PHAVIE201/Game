@@ -289,6 +289,20 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
 - Độ khó ảnh hưởng chiến thuật: tỉ lệ tìm chỗ nấp 25% / 55% / 80%, dùng lựu đạn 20% / 60% / 90% (Dễ / Thường /
   Khó).
 
+**3.4 Nhảy dù tản ra, nhặt đồ trên đường vào bo** ✔
+- Chọn chỗ đáp: nhà kho / nhà dài hấp dẫn hơn, gần đường bay hơn thì tốt hơn (tới 650 m), và **tránh chỗ bot khác
+  đã chọn** (trọng số chia cho 1 + 1.5·n²). 15% bot "thích đánh sớm" lại cố tình đáp vào chỗ đông.
+- Bo pha 1–2 (sát thương thấp): bot còn thiếu đồ mà phải di chuyển thì **lục một ngôi nhà nằm trên đường vào bo**
+  thay vì chạy thẳng. Chạy vào bo đường xa thì chạy nhanh (tính thời gian theo tốc độ chạy nhanh).
+- Bot tay không khi đã hết nhà để lục: đi tìm súng rơi từ xác chết trong bo (bán kính 260 m).
+
+**3.5 Hiệu năng cho 63 bot** ✔
+- Mức chi tiết mô phỏng theo khoảng cách tới camera: bot < 70 m (hoặc vừa bắn) chạy vật lý mỗi tick; 70–160 m mỗi
+  2 tick; xa hơn mỗi 3 tick (dồn delta, hình ảnh vẫn nội suy mượt); bot xa hơn 230 m ngoài nhà dùng di chuyển bám
+  địa hình, cũng mỗi 3 tick. Bộ não bot vẫn giảm tần suất như giai đoạn 1.
+- Bộ đo `Prof` (chỉ bật trong mô phỏng) in thời gian từng phần mỗi tick vật lý: `--matchsim=... --follow` cho camera
+  bám theo một bot còn sống để đo giống người chơi thật.
+
 ## 4. Kiến trúc
 
 ```

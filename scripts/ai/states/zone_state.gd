@@ -27,7 +27,7 @@ func _pick() -> void:
 func _mode() -> int:
 	var zone := Game.zone
 	var c := get_character()
-	if not zone.is_inside(c.global_position) or zone.time_until_closed() < 60.0:
+	if not zone.is_inside(c.global_position) or zone.time_until_closed() < 60.0 or brain.nav.distance_to_destination() > 150.0:
 		return BotBrain.MoveMode.SPRINT
 	return BotBrain.MoveMode.RUN
 

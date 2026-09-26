@@ -20,6 +20,9 @@ var alive: Array[GameCharacter] = []
 var player: GameCharacter = null
 var match_start_msec := 0
 var plane: AirPlane = null
+## Bots' chosen landing spots (building center Vector2 -> number of bots),
+## so they spread over the island instead of all dropping on the same house.
+var drop_claims: Dictionary = {}
 
 var _characters_root: Node3D
 var _brains: Array[BotBrain] = []
@@ -175,6 +178,7 @@ func restart() -> void:
 
 func clear() -> void:
 	state = State.IDLE
+	drop_claims.clear()
 	if plane != null and is_instance_valid(plane):
 		plane.queue_free()
 	plane = null

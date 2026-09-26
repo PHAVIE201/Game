@@ -81,6 +81,13 @@ func fire(shooter: GameCharacter, origin: Vector3, dir: Vector3, weapon: WeaponD
 func _physics_process(delta: float) -> void:
 	if _bullets.is_empty():
 		return
+	var t0 := Time.get_ticks_usec() if Prof.enabled else 0
+	_step_all(delta)
+	if Prof.enabled:
+		Prof.add(&"bullets", t0)
+
+
+func _step_all(delta: float) -> void:
 	var space := get_world_3d().direct_space_state
 	_rebuild_grid()
 	var i := 0

@@ -10,6 +10,8 @@ extends Node
 ##                            standing) player from each distance for 10 s.
 ##   --matchsim=seconds       bots-only match (the player is parked out of reach)
 ##                            with statistics about zone, fights and bot states.
+##                            --follow: the (hidden) player camera hovers above a
+##                            live bot, so level-of-detail matches a real player.
 ##   --bots=N  --seed=S  --zone=scale   match options for all modes.
 ##
 ## Example (headless smoke test):
@@ -23,7 +25,11 @@ var bots := 8
 var map_seed := 1337
 var zone_scale := 1.0
 var _sim_started := false
+var _sim_follow := false
+var _sim_follow_timer := 0.0
+var _sim_followed: GameCharacter = null
 var _sim_dump_timer := 60.0
+var _sim_ticks := 0
 var _sim := {"zone_deaths": 0, "gun_deaths": 0, "other_deaths": 0, "landed": false}
 
 var _t := 0.0
@@ -81,6 +87,8 @@ func _ready() -> void:
 			map_seed = int(a.split("=")[1])
 		elif a.begins_with("--zone="):
 			zone_scale = float(a.split("=")[1])
+		elif a == "--follow":
+			_sim_follow = true
 		elif a.begins_with("--matchsim"):
 			mode = "matchsim"
 			if "=" in a:
@@ -824,6 +832,9 @@ func _run_matchsim(delta: float) -> void:
 	var mm := Game.match_manager
 	if not _sim_started:
 		_sim_started = true
+		Prof.enabled = true
+		Prof.take()
+		_sim_ticks = Engine.get_physics_frames()
 		var ctrl := p.get_node("PlayerController")
 		ctrl.set_process(false)
 		ctrl.set_process_unhandled_input(false)
@@ -842,6 +853,20 @@ func _run_matchsim(delta: float) -> void:
 				_sim.gun_deaths += 1
 			else:
 				_sim.other_deaths += 1)
+	if _sim_follow:
+		_sim_follow_timer -= delta
+		if _sim_followed == null or not is_instance_valid(_sim_followed) or _sim_followed.is_dead or _sim_follow_timer <= 0.0:
+			_sim_follow_timer = 15.0
+			var candidates: Array[GameCharacter] = []
+			for c in mm.alive:
+				if c != p and not c.is_in_air():
+					candidates.append(c)
+			if not candidates.is_empty():
+				_sim_followed = candidates[_rng.randi() % candidates.size()]
+		if _sim_followed != null and is_instance_valid(_sim_followed):
+			# Hovering, hidden like a plane passenger: bots cannot see it.
+			p.air_state = GameCharacter.AirState.PLANE
+			p.global_position = _sim_followed.global_position + Vector3(0, 25.0, 0)
 	if not _sim.landed:
 		var flying := 0
 		var misses: Array[float] = []
@@ -884,6 +909,17 @@ func _run_matchsim(delta: float) -> void:
 		print("[sim] t=%3.0fs alive=%d phase=%d state=%d r=%.0f outside=%d armed=%d deaths(zone=%d gun=%d) states=%s loot=%s" % [
 			_t, mm.alive.size() - 1, zone.phase, zone.state, zone.radius, outside, armed,
 			_sim.zone_deaths, _sim.gun_deaths, str(states), str(LootState.stats)])
+		# Profile: ms per physics tick for each section over the last window.
+		var ticks := maxi(Engine.get_physics_frames() - _sim_ticks, 1)
+		_sim_ticks = Engine.get_physics_frames()
+		var prof := Prof.take()
+		var parts := []
+		var total_ms := 0.0
+		for key in prof:
+			var ms: float = prof[key] / 1000.0 / ticks
+			total_ms += ms
+			parts.append("%s=%.2f" % [key, ms])
+		print("[prof] alive=%d ms/tick: %s  (sum %.2f)" % [mm.alive.size() - 1, " ".join(parts), total_ms])
 	_sim_dump_timer -= delta
 	if _sim_dump_timer <= 0.0:
 		_sim_dump_timer = 60.0
@@ -899,9 +935,12 @@ func _run_matchsim(delta: float) -> void:
 				"A" if c.is_armed() else "-", c.health, str(guns), c.inventory.helmet, c.inventory.vest,
 				c.inventory.items.size(), b.fsm.current_name if b != null else &"?"])
 	if _t > duration or mm.alive.size() <= 2:
-		print("[sim] END t=%.0fs alive_bots=%d zone_deaths=%d gun_deaths=%d other=%d avg_physics=%.2fms" % [
+		var frame_time := 0.0
+		for f in _fps_samples:
+			frame_time += 1.0 / f
+		print("[sim] END t=%.0fs alive_bots=%d zone_deaths=%d gun_deaths=%d other=%d avg_physics=%.2fms avg_fps(headless)=%.0f" % [
 			_t, mm.alive.size() - 1, _sim.zone_deaths, _sim.gun_deaths, _sim.other_deaths,
-			_cpu_physics / maxf(_cpu_samples, 1) * 1000.0])
+			_cpu_physics / maxf(_cpu_samples, 1) * 1000.0, _fps_samples.size() / maxf(frame_time, 0.001)])
 		get_tree().quit()
 
 

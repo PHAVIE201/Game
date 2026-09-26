@@ -22,7 +22,12 @@ func update(delta: float) -> void:
 		return
 	# Far away bots (lower LOD) look around less often.
 	_timer = INTERVAL * (1.0 + (brain.lod_every - 1) * 0.35) + randf() * 0.08
-	scan()
+	if Prof.enabled:
+		var t0 := Time.get_ticks_usec()
+		scan()
+		Prof.add(&"perception", t0)
+	else:
+		scan()
 
 
 func scan() -> void:

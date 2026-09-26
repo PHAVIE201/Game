@@ -119,6 +119,14 @@ var last_fire_msec := -100000
 var sim_simple := false
 ## Set by the bot navigator while walking through doorways: full physics.
 var nav_precise := false
+## Bots away from the camera simulate less often (with the summed delta):
+## every 2nd tick beyond HALF_RATE_DIST, every 3rd beyond THIRD_RATE_DIST and
+## for far "simple" bots. move_and_slide() is the most expensive part of a bot.
+const HALF_RATE_DIST := 70.0
+const THIRD_RATE_DIST := 160.0
+const SIMPLE_EVERY := 3
+var _half_rate_delta := 0.0
+var _rate_tick := 0
 const SIMPLE_ENTER_DIST := 230.0
 const SIMPLE_EXIT_DIST := 200.0
 
@@ -146,6 +154,7 @@ var _ray := PhysicsRayQueryParameters3D.new()
 
 func _ready() -> void:
 	_rng.randomize()
+	_rate_tick = _rng.randi() % SIMPLE_EVERY   # stagger bots across ticks
 	collision_layer = Layers.CHARACTERS
 	collision_mask = Layers.CHARACTER_MASK
 	floor_max_angle = deg_to_rad(50.0)
@@ -718,6 +727,40 @@ func get_time_alive() -> float:
 # --------------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
+	if _skip_tick(delta):
+		return
+	delta += _half_rate_delta
+	_half_rate_delta = 0.0
+	if not Prof.enabled:
+		_simulate(delta)
+		return
+	var t0 := Time.get_ticks_usec()
+	_simulate(delta)
+	Prof.add(&"character" if not sim_simple else &"character_lod", t0)
+
+
+## Level of detail: bots between HALF_RATE_DIST and the "simple" distance
+## skip every other tick (staggered). Never while in the air, swimming, going
+## through a doorway or fighting at close range.
+func _skip_tick(delta: float) -> bool:
+	if is_player or is_dead or air_state != AirState.NONE or is_swimming:
+		return false
+	var every := SIMPLE_EVERY
+	if not sim_simple:
+		var d2 := Game.get_view_position().distance_squared_to(global_position)
+		if d2 < HALF_RATE_DIST * HALF_RATE_DIST or Time.get_ticks_msec() - last_fire_msec < 1000:
+			return false
+		every = 3 if d2 > THIRD_RATE_DIST * THIRD_RATE_DIST else 2
+	_rate_tick = (_rate_tick + 1) % every
+	if _rate_tick == 0:
+		return false
+	_half_rate_delta += delta
+	# Keep the visual interpolation steady (no motion this tick).
+	_prev_pos = _curr_pos
+	return true
+
+
+func _simulate(delta: float) -> void:
 	_prev_pos = _curr_pos
 	if air_state != AirState.NONE and not is_dead:
 		_update_air(delta)

@@ -17,6 +17,8 @@ var zone_margin := 30.0
 ## Chance to look for cover in a fight / to use grenades (tactics).
 var cover_chance := 0.55
 var grenade_chance := 0.6
+## Likes crowded drop spots (early fights) instead of quiet ones.
+var hot_dropper := false
 
 
 static func create(difficulty: int, rng: RandomNumberGenerator) -> BotProfile:
@@ -47,6 +49,7 @@ static func create(difficulty: int, rng: RandomNumberGenerator) -> BotProfile:
 	p.view_distance *= rng.randf_range(0.85, 1.1)
 	p.crouch_chance = rng.randf_range(0.15, 0.5)
 	p.zone_margin = rng.randf_range(10.0, 60.0)
+	p.hot_dropper = rng.randf() < 0.15
 	p.burst_min = rng.randi_range(2, 4)
 	p.burst_max = p.burst_min + rng.randi_range(2, 4)
 	return p
