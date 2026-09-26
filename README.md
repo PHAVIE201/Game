@@ -5,7 +5,8 @@ PUBG nhưng **toàn bộ tên, hình ảnh và thiết kế đều tự làm**. 
 súng, âm thanh) đều được **sinh bằng code** trong Godot. Không dùng model, texture hay file âm thanh
 bên ngoài.
 
-> Trạng thái: **Giai đoạn 1/4 – Nền móng** (xong) · **Giai đoạn 2 – Vòng lặp battle royale** (đang làm, xem mục 3b).
+> Trạng thái: **Giai đoạn 1 – Nền móng** ✔ · **Giai đoạn 2 – Vòng lặp battle royale** ✔ (mục 3b) ·
+> **Giai đoạn 3 – Bot thông minh, 63 bot** ✔ (mục 3c) · Giai đoạn 4 – Tối ưu: chưa làm.
 > Bản đồ: *Đảo Mây* (sinh theo seed) · 6 khẩu súng · Engine: Godot **4.7.2 Standard (GDScript)**
 
 ![Gameplay](docs/screenshots/gameplay.jpg)
@@ -122,7 +123,7 @@ Có thể đổi phím trong `Project Settings > Input Map` (hoặc sửa `tools
 - Toàn bộ âm thanh được tổng hợp bằng code: tiếng súng (xa thì bị lọc trầm), nạp đạn, trúng đích,
   bước chân, đạn sượt qua.
 
-## 3b. Giai đoạn 2 – Vòng lặp battle royale (đang làm)
+## 3b. Giai đoạn 2 – Vòng lặp battle royale
 
 Mỗi mục dưới đây được commit riêng khi đã chạy được và qua `tools/check_project.sh`.
 
@@ -246,7 +247,7 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
   súng chính ngẫu nhiên và đạn không giới hạn (bot biết nhặt đồ ở giai đoạn 3); khi chết bot rơi súng và
   vài hộp đạn.
 
-## 3c. Giai đoạn 3 – Bot thông minh hơn (đang làm)
+## 3c. Giai đoạn 3 – Bot thông minh hơn
 
 **3.1 Bot tự nhặt đồ** ✔
 - Bot (và người chơi) giờ **xuất phát tay không**, nhảy dù xuống và phải tự nhặt đồ. (Tùy chọn
@@ -300,8 +301,14 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
 - Mức chi tiết mô phỏng theo khoảng cách tới camera: bot < 70 m (hoặc vừa bắn) chạy vật lý mỗi tick; 70–160 m mỗi
   2 tick; xa hơn mỗi 3 tick (dồn delta, hình ảnh vẫn nội suy mượt); bot xa hơn 230 m ngoài nhà dùng di chuyển bám
   địa hình, cũng mỗi 3 tick. Bộ não bot vẫn giảm tần suất như giai đoạn 1.
+- **Xác chết ngủ**: 3 giây sau khi chết và đã nằm yên, xác không còn chạy vật lý lẫn hoạt họa (trước đó ~60 xác
+  vẫn gọi `move_and_slide` mỗi tick và chiếm phần lớn thời gian cuối trận).
 - Bộ đo `Prof` (chỉ bật trong mô phỏng) in thời gian từng phần mỗi tick vật lý: `--matchsim=... --follow` cho camera
   bám theo một bot còn sống để đo giống người chơi thật.
+- Tầm phát hiện của bot giảm tới 45% khi mục tiêu đứng trong rừng rậm (cây / bụi không chặn tia nhìn, chỉ thân
+  cây chặn).
+- Một trận 63 bot mô phỏng trọn vẹn (bo bình thường): tất cả đáp dù trong ~76 giây (lệch chỗ chọn trung vị 4 m),
+  trận kết thúc sau ~9 phút 20 giây với 1 người thắng; 60 bot chết vì súng / lựu đạn, 2 vì bo.
 
 ## 4. Kiến trúc
 
@@ -349,14 +356,14 @@ shaders/           foliage, water, tracer, zone_wall
 tools/             công cụ kiểm tra headless (xem mục 6)
 ```
 
-**Điểm mở rộng đã chuẩn bị cho các giai đoạn sau**
+**Điểm mở rộng**
 
 | Giai đoạn | Chỗ gắn vào |
 |---|---|
-| 2 – Máy bay, nhảy dù, bo, loot | `MatchManager.State` (thêm `PLANE`/`DROPPING`), `GameWorld.get_loot_points()` (đã có sẵn điểm loot trong mỗi nhà), `Inventory`, `GameCharacter._modify_incoming_damage()` (giáp/mũ) |
-| 2 – Nhiều súng, ống ngắm, lựu đạn, bom khói | Thêm file `WeaponData` .tres + model trong `WeaponModels`; `DamageInfo` dùng chung cho nổ / bo |
-| 3 – 63 bot thông minh hơn | Thêm `BotState` mới (Loot, Heal, MoveToZone, Parachute...) vào `BotBrain._build_states()`. Đã có sẵn LOD cho AI và vật lý (xem mục 5) |
-| 4 – Tối ưu | Map dạng chunk, LOD sẵn có; `make_map_image()` dùng cho bản đồ nhỏ; lớp vật lý `VEHICLES`, `ITEMS` đã khai báo |
+| Thêm súng | 1 file `WeaponData` .tres + model trong `WeaponModels` + dòng trong `WeaponDB` (loot: `LootManager.WEAPON_WEIGHTS`) |
+| Thêm vật phẩm | 1 dòng trong `ItemDB.ITEMS` (+ mesh trong `ItemModels`, bảng loot, điểm `BotLoot`) |
+| Hành vi bot mới | `BotState` mới đăng ký trong `BotBrain._build_states()`; luật nhặt / dùng đồ dùng chung với người chơi |
+| 4 – Tối ưu | `Prof` + `--matchsim --follow` để đo; LOD vật lý / AI ở `GameCharacter._skip_tick` và `BotBrain._compute_lod`; lớp vật lý `VEHICLES` đã khai báo |
 
 ## 5. Hiệu năng (thiết kế cho máy tầm trung)
 
@@ -377,7 +384,9 @@ tools/             công cụ kiểm tra headless (xem mục 6)
 - **Đạn**: mô phỏng dạng dữ liệu. Có lưới không gian để mỗi viên chỉ kiểm tra nhân vật ở gần.
   Toàn bộ tracer vẽ bằng 1 MultiMesh. Hiệu ứng và decal dùng pool.
 - **LOD cho mô phỏng**: bot ở xa camera (hơn 120 m / 300 m) chỉ "suy nghĩ" mỗi 2 / 4 tick vật lý.
-  Bot xa hơn 230 m bỏ `move_and_slide` và chỉ bám theo mặt đất.
+  Vật lý của bot: mỗi tick khi < 70 m, mỗi 2 tick tới 160 m, mỗi 3 tick xa hơn; bot xa hơn 230 m (ngoài nhà)
+  bỏ `move_and_slide` và chỉ bám theo mặt đất. Xác chết nằm yên thì tắt hẳn.
+- **Đồ nằm đất**: dữ liệu + 1 mesh mỗi món với tầm hiển thị 85 m, lưới không gian 8 m.
 
 Số đo trên máy ảo dùng để phát triển (CPU cloud, **không có GPU thật**):
 
@@ -385,8 +394,9 @@ Số đo trên máy ảo dùng để phát triển (CPU cloud, **không có GPU 
 |---|---|
 | Sinh đảo (seed 1337) | khoảng 3.8–4.4 giây |
 | Vẽ mỗi frame (cảnh thường, mức Trung bình) | khoảng 300–400 draw call, 200–290 nghìn tam giác |
-| Bước vật lý + AI + đạn, 8 bot | khoảng 3–5 ms (tùy trận đánh) |
-| Bước vật lý + AI + đạn, 63 bot (gần như tất cả đang đánh nhau) | khoảng 12 ms (sẽ tối ưu thêm ở giai đoạn 4) |
+| Bước vật lý + AI + đạn, 8 bot | khoảng 2–3 ms (tùy trận đánh) |
+| Bước vật lý + AI + đạn, 63 bot (trận đầy đủ, camera theo một bot) | trung bình ~6.4 ms; phần script ~3.5 ms lúc còn 45 bot, ~2 ms lúc còn 25 bot |
+| Vẽ bản đồ nhỏ lúc loading | ~0.8 giây |
 | Độ chính xác của bot mức Thường (bắn vào mục tiêu đứng yên) | 10 m: 43% · 25 m: 30% · 50 m: 18% · 100 m: 9% |
 
 FPS trên card đồ họa thật **chưa đo được** vì máy ảo chỉ có renderer phần mềm. Xem mục 7.
@@ -420,14 +430,16 @@ godot --path . res://tools/pose_gallery.tscn -- poses.png  # ảnh tổng hợp 
 
 ## 7. Hạn chế đã biết (để dành cho các giai đoạn sau)
 
-- Chưa có máy bay, nhảy dù, bo, loot, túi đồ, giáp, hồi máu. Người chơi bắt đầu ở một quảng trường
-  làng với 30 + 210 viên đạn. Bot xuất hiện trong bán kính khoảng 380 m (bo tạm thời: bot có xu
-  hướng đi về phía người chơi).
-- Bot đi bằng lái hướng (steering), không dùng navmesh, nên đôi khi lúng túng ở góc nhà. Bot nhìn
-  xuyên được tán cây / bụi (chỉ thân cây và tường chặn tầm nhìn).
-- Nhà hiện chỉ có 1 tầng. Chưa có đường sá, cầu, xe cộ.
-- Chưa có góc nhìn thứ nhất và chưa có ngắm qua ống ngắm (sẽ làm cùng hệ thống ống ngắm).
-- Với 63 bot, CPU vẫn còn khá nặng (xem mục 5).
+- Bot đi bằng lái hướng (steering) + các điểm qua cửa, không dùng navmesh: trong nhà có đồ đạc đôi khi vẫn
+  lúng túng. Bụi cây không chặn tầm nhìn (chỉ làm bot khó phát hiện hơn trong rừng).
+- Nhà chỉ có 1 tầng. Chưa có đường sá, cầu, xe cộ (lớp vật lý `VEHICLES` đã khai báo).
+- Chưa có chế độ theo dõi (spectate) sau khi chết; trận vẫn tiếp tục giữa các bot nhưng người chơi chỉ thấy
+  màn hình kết quả.
+- Đầu trận khá "nóng": nhiều bot đáp gần nhau và đánh nhau ngay (khoảng 1/4 số bot bị loại trong phút đầu sau
+  khi tiếp đất với 63 bot).
+- Chưa có góc nhìn thứ nhất tự do (chỉ khi ngắm qua ống ngắm). Ống ngắm không có hiệu chỉnh cự ly (zeroing).
+- Âm thanh vẫn là âm tổng hợp đơn giản; chưa có nhạc.
+- Với 63 bot, bước vật lý trung bình ~6.4 ms trên máy ảo; FPS trên card đồ họa thật vẫn chưa đo (giai đoạn 4).
 
 ## 8. Những điểm cần bạn chơi thử và phản hồi
 
@@ -449,3 +461,9 @@ godot --path . res://tools/pose_gallery.tscn -- poses.png  # ảnh tổng hợp 
    Cỡ chữ, vị trí thanh máu và số đạn.
 9. **Âm thanh**: âm thanh tổng hợp bằng code có chấp nhận được không, hay giai đoạn sau nên làm kỹ hơn?
 10. **Phong cách hình ảnh**: màu sắc, ánh sáng, sương mù xa. Bạn muốn tươi hơn, ấm hơn hay dịu hơn?
+11. **Nhảy dù**: tốc độ rơi / lượn có vừa không, camera trên máy bay, thời gian từ lúc nhảy tới lúc chạm đất.
+12. **Bo**: nhịp bo bình thường (~9 phút) có quá dài / quá ngắn với số bot bạn hay chơi không? Sát thương ngoài bo?
+13. **Loot**: đồ có quá nhiều / quá ít không, tỉ lệ súng / đạn / giáp; sức chứa balo; phím F / Tab có tiện không.
+14. **Ống ngắm và lựu đạn**: độ rung khi ngắm 4x / 8x, nín thở; đường bay lựu đạn, bán kính nổ, khói.
+15. **Bot giai đoạn 3**: bot có nhặt đồ hợp lý không, có nấp / ném lựu đạn / hồi máu đúng lúc không, đầu trận có
+    quá nhiều bot đánh nhau không, có con nào kẹt trong nhà không.

@@ -51,6 +51,10 @@ func scan() -> void:
 			range_mult = 0.75
 		elif c.stance == GameCharacter.Stance.PRONE:
 			range_mult = 0.45
+		# Dense forest hides people (trees and bushes are not in the line of
+		# sight test, only their trunks).
+		if Game.world != null and Game.world.terrain != null and d > 25.0:
+			range_mult *= lerpf(1.0, 0.55, Game.world.terrain.sample_forest(c.global_position.x, c.global_position.z))
 		if now - c.last_fire_msec < 1500:
 			range_mult = maxf(range_mult, 1.3)
 		if d > brain.profile.view_distance * range_mult:

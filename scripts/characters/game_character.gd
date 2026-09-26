@@ -140,6 +140,8 @@ var _worn := []
 var _air_time_total := 0.0
 var _throw_hold := 0.0
 var _throw_cooldown := 0.0
+## Seconds since death (corpses stop simulating once settled).
+var _corpse_time := 0.0
 var _stance_request := -1
 var _collision: CollisionShape3D
 var _capsule: CapsuleShape3D
@@ -776,6 +778,13 @@ func _simulate(delta: float) -> void:
 			velocity.y = maxf(velocity.y - GRAVITY * delta, -25.0)
 		move_and_slide()
 		_curr_pos = global_position
+		_corpse_time += delta
+		# Settled: a corpse costs nothing any more (physics and animation off).
+		if _corpse_time > 3.0 and is_on_floor():
+			_prev_pos = _curr_pos
+			model.position = Vector3.ZERO
+			set_physics_process(false)
+			set_process(false)
 		return
 	_update_stance()
 	_update_swimming()
