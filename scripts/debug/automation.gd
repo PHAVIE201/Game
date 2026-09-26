@@ -367,6 +367,7 @@ func _weapon_check() -> void:
 	print("[auto] weapon check: ", " ".join(report), " active=", p.weapon_data.id)
 	await _loot_check(p)
 	await _scope_check(p)
+	await _grenade_check(p)
 	await _armor_heal_check(p)
 	await _zone_check(p)
 	Events.character_damaged.disconnect(on_dmg)
@@ -427,6 +428,62 @@ func _scope_check(p: GameCharacter) -> void:
 		mounted, in_bag, on_pistol, swapped, scoped, fov, back, unmounted])
 	if not (mounted and in_bag and on_pistol and swapped and scoped and fov < 12.0 and back and unmounted):
 		_checks_failed.append("scopes")
+
+
+## Frag damage falls off and is blocked by walls, cooking too long explodes in
+## the hand, the throw consumes the item, smoke blocks the line of sight.
+func _grenade_check(p: GameCharacter) -> void:
+	var thr := Game.throwables
+	var dummy: GameCharacter = null
+	for c in Game.match_manager.alive:
+		if not c.is_player:
+			dummy = c
+			break
+	dummy.inventory.take_off(true)
+	dummy.inventory.take_off(false)
+	var fwd := Vector3(-sin(p.aim_yaw), 0.0, -cos(p.aim_yaw))
+	var dpos := p.global_position + fwd * 5.0
+	dummy.global_position = Vector3(dpos.x, Game.world.get_height(dpos.x, dpos.z) + 0.1, dpos.z)
+	dummy.velocity = Vector3.ZERO
+	dummy.max_health = 100.0
+	dummy.health = 100.0
+	p.max_health = 1000.0
+	p.health = 1000.0
+	await _wait(0.3)
+	# Frag right next to the dummy (the player, 5 m away, gets hurt a little too).
+	thr.throw_item(p, &"grenade_frag", dummy.global_position + Vector3(0.8, 0.2, 0.0), Vector3.ZERO, 0.3)
+	await _wait(0.6)
+	var dummy_hp := dummy.health
+	# Throw mechanics.
+	p.inventory.add(&"grenade_frag", 2)
+	p.inventory.add(&"grenade_smoke", 1)
+	p.begin_throw(&"grenade_frag")
+	await _wait(0.4)
+	var holding := p.throwing_item == &"grenade_frag"
+	p.release_throw()
+	var in_flight := thr._grenades.size() == 1 and p.inventory.get_count(&"grenade_frag") == 1
+	await _wait(ThrowableSystem.FRAG_FUSE + 0.3)
+	# Cooking too long.
+	var hp_before := p.health
+	p.begin_throw(&"grenade_frag")
+	await _wait(ThrowableSystem.FRAG_FUSE + 0.4)
+	var cooked := p.throwing_item == &"" and p.inventory.get_count(&"grenade_frag") == 0 and p.health < hp_before - 40.0
+	# Smoke 8 m ahead.
+	var spot := p.global_position + fwd * 8.0
+	spot.y = Game.world.get_height(spot.x, spot.z)
+	thr.throw_item(p, &"grenade_smoke", spot + Vector3(0, 0.2, 0), Vector3.ZERO)
+	await _wait(ThrowableSystem.SMOKE_FUSE + 3.0)
+	var eye := p.get_eye_position()
+	var blocked := thr.smoke_blocks(eye, eye + fwd * 16.0)
+	var side_clear := not thr.smoke_blocks(eye, eye + fwd.rotated(Vector3.UP, 1.4) * 16.0)
+	print("[auto] grenade check: dummy_hp=%.0f holding=%s thrown=%s cooked=%s smoke_blocks=%s side_clear=%s" % [
+		dummy_hp, holding, in_flight, cooked, blocked, side_clear])
+	if dummy_hp > 40.0 or not holding or not in_flight or not cooked or not blocked or not side_clear:
+		_checks_failed.append("grenades / smoke")
+	thr.clear()
+	p.max_health = 100.0
+	p.health = 100.0
+	dummy.health = 100.0
 
 
 ## Runs every zone phase at 1% of the normal duration: circles must nest and
@@ -1054,6 +1111,33 @@ func _run_screenshots() -> void:
 		await _shot("14_bullet_holes")
 		p.input_aim = false
 
+	# Grenade: aiming arc, explosion, smoke cloud.
+	var thr := Game.throwables
+	p.inventory.add(&"grenade_frag", 1)
+	p.inventory.add(&"grenade_smoke", 1)
+	_skip_plane()
+	p.aim_pitch = -0.35
+	await _wait(1.0)
+	p.begin_throw(&"grenade_frag")
+	var ctrl2 := p.get_node("PlayerController")
+	ctrl2.set_process(true)   # draws the arc
+	await _wait(0.6)
+	await _shot("14b_grenade_arc")
+	ctrl2.set_process(false)
+	p.release_throw()
+	thr.show_arc(PackedVector3Array())
+	var t_throw := Time.get_ticks_msec()
+	while not thr._grenades.is_empty() and Time.get_ticks_msec() - t_throw < 30000:
+		await get_tree().process_frame
+	await _shot("14c_explosion")
+	await _wait(1.0)
+	p.begin_throw(&"grenade_smoke")
+	await _wait(0.3)
+	p.release_throw()
+	# Game time, not wall time (a software renderer runs the game slower).
+	await _wait_physics(ThrowableSystem.SMOKE_FUSE + 4.0)
+	await _shot("14d_smoke")
+
 	# Safe zone wall close to the player, the minimap and the big map.
 	var zone := Game.zone
 	# Frozen "waiting" state so the circle stays where it is put.
@@ -1107,6 +1191,11 @@ func _run_screenshots() -> void:
 	await _shot("17_main_menu")
 	print("[auto] screenshots done")
 	get_tree().quit()
+
+
+func _wait_physics(seconds: float) -> void:
+	for k in int(seconds * Engine.physics_ticks_per_second):
+		await get_tree().physics_frame
 
 
 func _wait(seconds: float) -> void:

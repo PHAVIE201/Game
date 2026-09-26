@@ -18,8 +18,14 @@ func _ready() -> void:
 	camera_rig = get_node(camera_rig_path) as ThirdPersonCamera
 
 
+var _arc_shown := false
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if character.is_dead or get_tree().paused:
+		return
+	if event.is_action_released("throw_frag") or event.is_action_released("throw_smoke"):
+		character.release_throw()
 		return
 	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	if event is InputEventMouseMotion and captured:
@@ -56,6 +62,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		character.equip_slot(GameCharacter.SLOT_PISTOL)
 	elif event.is_action_pressed("holster"):
 		character.holster()
+	elif event.is_action_pressed("throw_frag") or event.is_action_pressed("throw_smoke"):
+		var id := &"grenade_frag" if event.is_action_pressed("throw_frag") else &"grenade_smoke"
+		if not character.begin_throw(id) and character.inventory.get_count(id) <= 0:
+			Events.loot_message.emit("Không có " + ItemDB.display_name(id))
 	elif event.is_action_pressed("quick_heal"):
 		var id := character.pick_heal()
 		if id == &"":
@@ -95,6 +105,19 @@ func _process(_delta: float) -> void:
 	character.input_aim = captured and Input.is_action_pressed("aim")
 	character.input_fire = captured and Input.is_action_pressed("fire")
 	_update_aim_point()
+	_update_throw_arc()
+
+
+## Shows where the grenade will fly while it is held.
+func _update_throw_arc() -> void:
+	if Game.throwables == null:
+		return
+	if character.throwing_item != &"" and not character.is_dead:
+		Game.throwables.show_arc(Game.throwables.predict(character.get_throw_origin(), character.get_throw_velocity()))
+		_arc_shown = true
+	elif _arc_shown:
+		Game.throwables.show_arc(PackedVector3Array())
+		_arc_shown = false
 
 
 ## The crosshair is the screen center: find what it points at, bullets leave the

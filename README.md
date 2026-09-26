@@ -56,6 +56,7 @@ Renderer: **Forward+** (Vulkan / D3D12 / Metal). Card đồ họa rất cũ khô
 | **F** | Nhặt món đồ đang nhìn vào (có dòng nhắc ở giữa màn hình). Trên máy bay: nhảy; khi rơi: mở dù |
 | **Tab** | Mở / đóng túi đồ (nhặt, bỏ, dùng đồ, cầm súng bằng chuột) |
 | **M** | Mở / đóng bản đồ lớn |
+| **G** / **T** (giữ, rồi thả) | Rút chốt lựu đạn / bom khói, hiện đường bay, thả tay để ném |
 | **H** | Hồi máu nhanh (tự chọn băng gạc / sơ cứu / hộp y tế hợp với lượng máu) |
 | **4 / 5 / 6 / 7 / 8** | Băng gạc / Bộ sơ cứu / Hộp y tế / Nước tăng lực / Thuốc giảm đau (bấm lại để hủy) |
 | **Esc** | Tạm dừng (chỉnh độ nhạy chuột, đồ họa, về menu) |
@@ -228,7 +229,20 @@ Mỗi mục dưới đây được commit riêng khi đã chạy được và qu
 - HUD hiện ống ngắm trong danh sách súng ("K7 Kestrel [4x]"). Tỉ lệ loot: ống ngắm 8% các điểm
   (chấm đỏ 40, 2x 30, 4x 20, 8x 10).
 - Bot mang DMR / súng bắn tỉa có sẵn 4x hoặc 8x, 40% bot súng trường có ống; ống ngắm giúp bot bắn chính xác
-  hơn ở xa (sai số ×0.75 khi > 60 m). Bot tạm thời vẫn xuất phát với một
+  hơn ở xa (sai số ×0.75 khi > 60 m).
+
+**2.7 Lựu đạn và bom khói** ✔
+- **Lựu đạn** (nặng 12) và **bom khói** (nặng 10) là đồ trong balo; loot 7% các điểm (lựu đạn 60, khói 40).
+- **Giữ G / T**: rút chốt, hiện đường bay dự đoán (vạch vàng, tính cả nảy tường / đất), tay phải vung ra sau với
+  quả lựu đạn trong tay. **Thả phím** để ném (19 m/s, hơi bổng). Ngòi lựu đạn 4.5 giây tính từ lúc rút chốt, có
+  đếm ngược ở tâm màn hình; giữ quá lâu thì nổ ngay trên tay.
+- Vật ném bay theo đạn đạo, nảy trên tường / đất (mất năng lượng mỗi lần nảy), chìm khi rơi xuống nước.
+- **Nổ**: sát thương tới 115 trong bán kính 8 m (giảm dần theo khoảng cách), tường / địa hình che chắn được,
+  áo giáp giảm sát thương nổ. Có chớp sáng, tia lửa, khói đen, tiếng nổ tổng hợp, rung camera khi ở gần. Bot
+  "nghe" được tiếng nổ. Người ném được tính điểm hạ gục.
+- **Bom khói**: bung khói sau 2.2 giây, đám khói lớn dần tới bán kính 7 m, tồn tại 32 giây rồi tan. Khói
+  **chặn tầm nhìn của bot** (bot không thấy mục tiêu nằm sau / trong khói).
+- HUD: số lựu đạn / bom khói dưới danh sách súng. Bot tạm thời vẫn xuất phát với một
   súng chính ngẫu nhiên và đạn không giới hạn (bot biết nhặt đồ ở giai đoạn 3); khi chết bot rơi súng và
   vài hộp đạn.
 
@@ -241,6 +255,7 @@ Main (scenes/main)  ── MainMenu, LoadingScreen
      ├─ GameWorld        HeightMap → Settlements → TerrainBuilder → Vegetation → nước
      ├─ Characters       các GameCharacter (Player.tscn / Bot.tscn)
      ├─ ProjectileSystem đạn dạng dữ liệu + tracer MultiMesh
+     ├─ ThrowableSystem  lựu đạn / bom khói (đạn đạo, nổ, khói chặn tầm nhìn)
      ├─ FxManager        pool hiệu ứng / decal
      ├─ LootManager      đồ nằm đất, luật nhặt / bỏ / rơi đồ khi chết
      ├─ ZoneManager      bo: các pha, tường bo, sát thương ngoài bo
@@ -266,7 +281,8 @@ scripts/
   characters/      game_character, character_model, character_hitboxes, player_controller,
                    third_person_camera, inventory
   items/           item_db (danh mục đồ), item_models, loot_manager (đồ nằm đất + luật nhặt/bỏ)
-  weapons/         weapon_data (Resource), weapon_db, weapon, projectile_system, weapon_models, damage_info
+  weapons/         weapon_data (Resource), weapon_db, weapon, projectile_system, throwable_system,
+                   weapon_models, damage_info
   ai/              bot_brain, bot_perception, bot_navigator, bot_profile, state_machine, bot_state
   ai/states/       idle, wander, investigate, combat, zone, parachute
   fx/  ui/  debug/ (automation cho test headless)

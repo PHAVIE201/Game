@@ -94,6 +94,15 @@ func _draw() -> void:
 		draw_arc(c, 26.0, 0.0, TAU, 40, Color(0, 0, 0, 0.35), 4.0)
 		draw_arc(c, 26.0, -PI * 0.5, -PI * 0.5 + TAU * prog, 40, Color(1.0, 0.8, 0.3, 0.95), 4.0)
 
+	# Grenade in the hand: fuse countdown.
+	if p.throwing_item != &"":
+		var font2 := get_theme_default_font()
+		var t2 := ItemDB.display_name(p.throwing_item)
+		if p.throwing_item == &"grenade_frag":
+			t2 += "  %.1f s" % maxf(p.get_fuse_left(), 0.0)
+		var col2 := Color(1.0, 0.45, 0.35) if p.throwing_item == &"grenade_frag" and p.get_fuse_left() < 1.5 else Color(1.0, 0.95, 0.7)
+		draw_string(font2, c + Vector2(-150, 48), t2, HORIZONTAL_ALIGNMENT_CENTER, 300, 18, col2)
+
 	# Heal / boost in progress
 	if p.is_using_item():
 		var up := p.get_use_progress()

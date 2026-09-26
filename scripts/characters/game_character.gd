@@ -101,6 +101,8 @@ var weapon: Weapon
 var weapon_data: WeaponData
 var fists: Weapon
 var air_state: int = AirState.NONE
+## Grenade in the hand with the pin pulled (&"" = none).
+var throwing_item := &""
 ## The plane while on board (null otherwise).
 var plane: AirPlane = null
 ## 0..100, see BOOST_*.
@@ -126,6 +128,8 @@ var _use_left := 0.0
 var _use_total := 0.0
 var _worn := []
 var _air_time_total := 0.0
+var _throw_hold := 0.0
+var _throw_cooldown := 0.0
 var _stance_request := -1
 var _collision: CollisionShape3D
 var _capsule: CapsuleShape3D
@@ -413,6 +417,75 @@ func get_scope_zoom() -> float:
 	return ItemDB.zoom_of(weapon.scope) if weapon != null else 1.0
 
 
+# --------------------------------------------------------------------------
+# Grenades
+# --------------------------------------------------------------------------
+
+## Pulls the pin (frag fuse starts now). Release with release_throw().
+func begin_throw(id: StringName) -> bool:
+	if throwing_item != &"" or is_dead or is_in_air() or is_swimming or inventory.get_count(id) <= 0:
+		return false
+	cancel_item_use()
+	weapon.cancel_reload()
+	throwing_item = id
+	_throw_hold = 0.0
+	model.set_held_item(Game.throwables.get_mesh(id) if Game.throwables != null else null)
+	_play_weapon_sound(&"pin")
+	return true
+
+
+func release_throw() -> void:
+	if throwing_item == &"":
+		return
+	var id := throwing_item
+	throwing_item = &""
+	model.set_held_item(null)
+	if inventory.remove(id, 1) <= 0 or Game.throwables == null:
+		return
+	var fuse := ThrowableSystem.FRAG_FUSE - _throw_hold
+	Game.throwables.throw_item(self, id, get_throw_origin(), get_throw_velocity(), fuse)
+	model.on_throw()
+	_throw_cooldown = 0.6
+
+
+## Puts the pin back.
+func cancel_throw() -> void:
+	throwing_item = &""
+	if model != null:
+		model.set_held_item(null)
+
+
+func get_throw_origin() -> Vector3:
+	var right := Vector3(cos(aim_yaw), 0.0, -sin(aim_yaw))
+	return get_eye_position() + right * 0.25 + Vector3(0, 0.15, 0) + get_aim_direction() * 0.3
+
+
+func get_throw_velocity() -> Vector3:
+	return ThrowableSystem.throw_velocity(get_aim_direction(), velocity)
+
+
+## Seconds left on a frag held in the hand.
+func get_fuse_left() -> float:
+	return ThrowableSystem.FRAG_FUSE - _throw_hold
+
+
+func _update_throw(delta: float) -> void:
+	_throw_cooldown = maxf(_throw_cooldown - delta, 0.0)
+	if throwing_item == &"":
+		return
+	if is_swimming or is_in_air():
+		cancel_throw()
+		return
+	_throw_hold += delta
+	if throwing_item == &"grenade_frag" and _throw_hold >= ThrowableSystem.FRAG_FUSE:
+		# Cooked too long.
+		var id := throwing_item
+		cancel_throw()
+		inventory.remove(id, 1)
+		if Game.throwables != null:
+			Game.throwables.explode_in_hand(self, id, get_throw_origin())
+
+
 ## Empties weapons and inventory (after the death drop).
 func clear_loadout() -> void:
 	for k in SLOT_COUNT:
@@ -662,6 +735,7 @@ func _physics_process(delta: float) -> void:
 	_update_stance()
 	_update_swimming()
 	_update_movement(delta)
+	_update_throw(delta)
 	_update_weapon(delta)
 	_update_items(delta)
 	# The body never rotates; only the visual model turns toward the aim.
@@ -806,7 +880,8 @@ func _update_weapon(delta: float) -> void:
 		_reload_requested = false
 		if not is_swimming and _swap_left <= 0.0:
 			weapon.start_reload(inventory)
-	var can_fire := not is_sprinting and not is_swimming and _swap_left <= 0.0
+	var can_fire := not is_sprinting and not is_swimming and _swap_left <= 0.0 \
+		and throwing_item == &"" and _throw_cooldown <= 0.0
 	var shots := weapon.update(delta, input_fire, can_fire, inventory)
 	# Auto reload when trying to shoot an empty magazine.
 	if input_fire and can_fire and weapon.uses_ammo() and weapon.ammo == 0 and not weapon.is_reloading():
@@ -949,6 +1024,7 @@ func _die(info: DamageInfo) -> void:
 	weapon.cancel_reload()
 	_swap_left = 0.0
 	cancel_item_use()
+	cancel_throw()
 	var fall_dir := info.direction if info != null else Vector3(sin(aim_yaw), 0, cos(aim_yaw))
 	model.play_death(fall_dir)
 	var attacker: GameCharacter = (info.attacker as GameCharacter) if info != null else null
@@ -975,6 +1051,7 @@ func _process(delta: float) -> void:
 	model.reload_progress = weapon.get_reload_progress() if weapon.is_reloading() else -1.0
 	model.bolt_progress = weapon.get_bolt_progress()
 	model.using_item = using_item != &""
+	model.throw_hold = throwing_item != &""
 	# The new weapon starts lowered and comes up while switching.
 	model.swap_amount = smoothstep(0.0, 1.0, _swap_left / SWAP_TIME)
 	model.update_effects(delta)

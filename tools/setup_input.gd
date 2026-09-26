@@ -30,6 +30,8 @@ const KEYS := {
 	"use_energy_drink": [KEY_7],
 	"use_painkiller": [KEY_8],
 	"quick_heal": [KEY_H],
+	"throw_frag": [KEY_G],
+	"throw_smoke": [KEY_T],
 }
 const MOUSE := {
 	"fire": MOUSE_BUTTON_LEFT,

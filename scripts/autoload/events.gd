@@ -20,6 +20,8 @@ signal character_damaged(victim: Node, info: RefCounted)
 signal character_died(victim: Node, info: RefCounted)
 ## A weapon was fired. Bots use this to "hear" gunshots.
 signal shot_fired(shooter: Node, position: Vector3, loudness_radius: float)
+## A grenade exploded (camera shake, bots).
+signal explosion(position: Vector3, radius: float)
 
 ## Match flow.
 signal match_started()

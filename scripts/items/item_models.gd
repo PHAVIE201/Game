@@ -19,6 +19,9 @@ static func get_ground_transform(id: StringName) -> Transform3D:
 	if ItemDB.kind_of(id) == ItemDB.Kind.WEAPON:
 		# Gun on its side: its right side (+X) faces up, barrel along -Z.
 		return Transform3D(Basis(Vector3.FORWARD, PI * 0.5), Vector3(0, 0.045, 0.15))
+	if ItemDB.kind_of(id) == ItemDB.Kind.THROWABLE:
+		# Lying on its side.
+		return Transform3D(Basis(Vector3.BACK, PI * 0.5), Vector3(0, 0.04, 0))
 	return Transform3D.IDENTITY
 
 
@@ -58,6 +61,14 @@ static func _build(id: StringName) -> ArrayMesh:
 			_boost(mb, id, col)
 		ItemDB.Kind.SCOPE:
 			return WeaponModels.get_scope_mesh(id)
+		ItemDB.Kind.THROWABLE:
+			if id == &"grenade_smoke":
+				mb.add_frustum(Vector3(0, -0.06, 0), 0.032, 0.032, 0.12, 8, col)
+				mb.add_frustum(Vector3(0, 0.06, 0), 0.02, 0.02, 0.02, 6, Color(0.2, 0.2, 0.2))
+			else:
+				mb.add_sphere(Vector3.ZERO, Vector3(0.04, 0.05, 0.04), col, 8, 5)
+				mb.add_box(Vector3(0, 0.055, 0), Vector3(0.025, 0.02, 0.025), Color(0.2, 0.2, 0.2))
+				mb.add_box(Vector3(0.022, 0.035, 0), Vector3(0.01, 0.06, 0.015), Color(0.6, 0.6, 0.6))
 		_:
 			mb.add_box(Vector3(0, 0.1, 0), Vector3(0.2, 0.2, 0.2), col)
 	return mb.commit(_mat())

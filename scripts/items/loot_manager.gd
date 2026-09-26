@@ -20,7 +20,7 @@ const VIEW_RANGE := 85.0
 const SPOT_CHANCE := 0.82
 
 ## Relative weights of what a loot spot contains.
-const SPOT_TABLE := {"weapon": 25.0, "ammo": 24.0, "backpack": 6.0, "helmet": 7.0, "vest": 7.0, "heal": 16.0, "boost": 7.0, "scope": 8.0}
+const SPOT_TABLE := {"weapon": 24.0, "ammo": 23.0, "backpack": 6.0, "helmet": 7.0, "vest": 7.0, "heal": 15.0, "boost": 6.0, "scope": 7.0, "throwable": 7.0}
 const WEAPON_WEIGHTS := {&"k7": 22.0, &"v9": 22.0, &"b12": 18.0, &"d3": 9.0, &"r8": 6.0, &"p1": 23.0}
 const AMMO_WEIGHTS := {&"ammo_rifle": 35.0, &"ammo_smg": 30.0, &"ammo_shotgun": 15.0, &"ammo_sniper": 20.0}
 const BACKPACK_WEIGHTS := {&"backpack_1": 60.0, &"backpack_2": 30.0, &"backpack_3": 10.0}
@@ -29,6 +29,7 @@ const VEST_WEIGHTS := {&"vest_1": 55.0, &"vest_2": 33.0, &"vest_3": 12.0}
 const HEAL_WEIGHTS := {&"bandage": 55.0, &"first_aid": 32.0, &"medkit": 13.0}
 const BOOST_WEIGHTS := {&"energy_drink": 65.0, &"painkiller": 35.0}
 const SCOPE_WEIGHTS := {&"scope_reddot": 40.0, &"scope_2x": 30.0, &"scope_4x": 20.0, &"scope_8x": 10.0}
+const THROWABLE_WEIGHTS := {&"grenade_frag": 60.0, &"grenade_smoke": 40.0}
 
 
 class Pickup:
@@ -124,6 +125,8 @@ func _spawn_spot(at: Vector3, rng: RandomNumberGenerator) -> void:
 			spawn(_pick(BOOST_WEIGHTS, rng), 1, at, yaw)
 		"scope":
 			spawn(_pick(SCOPE_WEIGHTS, rng), 1, at, yaw)
+		"throwable":
+			spawn(_pick(THROWABLE_WEIGHTS, rng), 1, at, yaw)
 
 
 static func _pick(table: Dictionary, rng: RandomNumberGenerator) -> Variant:

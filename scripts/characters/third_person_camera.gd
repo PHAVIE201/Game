@@ -56,6 +56,7 @@ func _ready() -> void:
 	_ray.collision_mask = Layers.WORLD
 	Game.camera = camera
 	Game.camera_rig = self
+	Events.explosion.connect(_on_explosion)
 	_wind = AudioStreamPlayer.new()
 	_wind.stream = Sfx.get_loop(&"wind")
 	_wind.volume_db = -60.0
@@ -99,6 +100,12 @@ func _update_wind(delta: float) -> void:
 		_wind.play()
 	elif _wind.volume_db <= -55.0 and _wind.playing:
 		_wind.stop()
+
+
+func _on_explosion(pos: Vector3, radius: float) -> void:
+	var d := pos.distance_to(target.global_position)
+	if d < radius * 4.0:
+		_shake = minf(_shake + 3.0 * (1.0 - d / (radius * 4.0)), 4.0)
 
 
 func _on_fired() -> void:

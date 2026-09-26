@@ -192,6 +192,8 @@ func clear() -> void:
 		Game.fx.clear()
 	if Game.loot != null:
 		Game.loot.clear()
+	if Game.throwables != null:
+		Game.throwables.clear()
 
 
 func get_alive_count() -> int:

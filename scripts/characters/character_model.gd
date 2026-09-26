@@ -54,6 +54,8 @@ var swap_amount := 0.0        ## 1 = weapon lowered (switching), 0 = ready
 var using_item := false       ## bandaging / drinking: gun lowered, hands together
 ## GameCharacter.AirState: 2 = freefall (spread-eagle), 3 = parachute.
 var air_pose := 0
+## Winding up a grenade throw.
+var throw_hold := false
 
 ## Model-space transforms of every bone after the last animate().
 var bone_global: Array[Transform3D] = []
@@ -71,6 +73,8 @@ var back_guns: Array[MeshInstance3D] = []
 var helmet_mesh: MeshInstance3D
 var vest_mesh: MeshInstance3D
 var canopy: MeshInstance3D
+## Grenade in the right hand while winding up.
+var held_item: MeshInstance3D
 
 static var _armor_cache: Dictionary = {}
 
@@ -82,6 +86,8 @@ var _punch_side := 1.0
 var _use := 0.0
 var _fall := 0.0
 var _chute := 0.0
+var _wind := 0.0
+var _swing := 0.0
 var _crouch := 0.0
 var _prone := 0.0
 var _ads := 0.0
@@ -170,6 +176,11 @@ func build(outfit: Dictionary, weapon_model: StringName, use_flash_light: bool) 
 	vest_mesh.visible = false
 	add_child(vest_mesh)
 
+	held_item = MeshInstance3D.new()
+	held_item.name = "HeldItem"
+	held_item.visible = false
+	add_child(held_item)
+
 	canopy = MeshInstance3D.new()
 	canopy.name = "Parachute"
 	canopy.mesh = _canopy_mesh(outfit)
@@ -251,6 +262,17 @@ func set_weapon(model_id: StringName) -> void:
 	if flash_light != null:
 		flash_light.position = muzzle_local + Vector3(0, 0, -0.1)
 	gun.visible = _armed and not _dead
+
+
+## Grenade shown in the right hand (null = none).
+func set_held_item(mesh: Mesh) -> void:
+	held_item.mesh = mesh
+	held_item.visible = mesh != null
+
+
+## Arm swing when a grenade leaves the hand.
+func on_throw() -> void:
+	_swing = 1.0
 
 
 ## Shows a scope on the rail of the gun in the hands (&"" = none).
@@ -436,6 +458,8 @@ func animate(delta: float) -> void:
 	_punch = move_toward(_punch, 0.0, k * 4.5)
 	_use = move_toward(_use, 1.0 if using_item else 0.0, k * 4.0)
 	_fall = move_toward(_fall, 1.0 if air_pose == 2 else 0.0, k * 3.0)
+	_wind = move_toward(_wind, 1.0 if throw_hold else 0.0, k * 6.0)
+	_swing = move_toward(_swing, 0.0, k * 3.0)
 	_chute = move_toward(_chute, 1.0 if air_pose == 3 else 0.0, k * 2.5)
 	canopy.visible = _chute > 0.02 and not _dead
 	if canopy.visible:
@@ -526,7 +550,7 @@ func animate(delta: float) -> void:
 	if bolt_progress >= 0.0:
 		var bp := sin(clampf(bolt_progress * 1.6, 0.0, 1.0) * PI)
 		gun_basis = gun_basis * Basis(Vector3.FORWARD, -0.25 * bp)
-	var lowered := maxf(swap_amount, _use)
+	var lowered := maxf(maxf(swap_amount, _use), maxf(_wind, _swing))
 	if lowered > 0.0:
 		# Weapon switch / using an item: the gun dips out of the way.
 		gun_basis = gun_basis * Basis(Vector3.RIGHT, -0.9 * lowered)
@@ -558,6 +582,14 @@ func animate(delta: float) -> void:
 		# Hands up on the steering lines.
 		hand_l = hand_l.lerp(g[B.CHEST] * Vector3(-0.24, 0.62, 0.02), _chute)
 		hand_r = hand_r.lerp(g[B.CHEST] * Vector3(0.24, 0.62, 0.02), _chute)
+	if _wind > 0.0 or _swing > 0.0:
+		# Grenade: right arm cocked behind the head, left arm pointing ahead;
+		# on release the right arm swings forward.
+		var cocked := g[B.CHEST] * Vector3(0.3, 0.46, 0.24)
+		var thrown := g[B.CHEST] * Vector3(0.1, 0.28, -0.55)
+		var arm := cocked.lerp(thrown, 1.0 - _swing) if _swing > 0.0 else cocked
+		hand_r = hand_r.lerp(arm, maxf(_wind, _swing))
+		hand_l = hand_l.lerp(g[B.CHEST] * Vector3(-0.18, 0.3, -0.45), maxf(_wind, _swing) * 0.8)
 	if _use > 0.0:
 		# Hands together in front of the chest (bandaging / drinking).
 		var wobble := sin(_phase * 0.5 + _death_t) * 0.02
@@ -605,6 +637,8 @@ func animate(delta: float) -> void:
 		g[ft] = Transform3D(Basis(q), g[ft].origin)
 
 	_update_back_guns(g)
+	if held_item.visible:
+		held_item.transform = Transform3D(g[B.HAND_R].basis, g[B.HAND_R] * Vector3(0, -0.07, -0.02))
 	if helmet_mesh.visible:
 		helmet_mesh.transform = g[B.HEAD]
 	if vest_mesh.visible:

@@ -42,6 +42,10 @@ const ITEMS := {
 	&"scope_2x": {"name": "Ống ngắm 2x", "kind": Kind.SCOPE, "level": 2, "zoom": 2.0, "weight": 5.0, "stack": 1, "color": Color(0.25, 0.25, 0.27)},
 	&"scope_4x": {"name": "Ống ngắm 4x", "kind": Kind.SCOPE, "level": 3, "zoom": 4.0, "weight": 5.0, "stack": 1, "color": Color(0.22, 0.26, 0.22)},
 	&"scope_8x": {"name": "Ống ngắm 8x", "kind": Kind.SCOPE, "level": 4, "zoom": 8.0, "weight": 5.0, "stack": 1, "color": Color(0.18, 0.18, 0.2)},
+
+	# Throwables (see ThrowableSystem).
+	&"grenade_frag": {"name": "Lựu đạn", "kind": Kind.THROWABLE, "weight": 12.0, "stack": 1, "color": Color(0.3, 0.38, 0.24)},
+	&"grenade_smoke": {"name": "Bom khói", "kind": Kind.THROWABLE, "weight": 10.0, "stack": 1, "color": Color(0.55, 0.58, 0.6)},
 }
 
 ## Heals / boosts in the order of the quick-use keys (4..8).

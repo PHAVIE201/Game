@@ -92,6 +92,11 @@ func _build_sounds() -> void:
 	_streams[&"bandage"] = _make(_synth_noise_burst(0.6, 0.12, 0.35))
 	_streams[&"drink"] = _make(_synth_tone(0.35, 180.0, 0.35, 6.0))
 	_streams[&"chute_open"] = _make(_synth_noise_burst(0.45, 0.25, 0.6))
+	_streams[&"explosion"] = _make(_synth_explosion(1.6))
+	_streams[&"pin"] = _make(_synth_click(0.05, 3000.0, 0.6))
+	_streams[&"throw"] = _make(_synth_noise_burst(0.18, 0.1, 0.35))
+	_streams[&"clink"] = _make(_synth_tone(0.08, 1900.0, 0.35, 40.0))
+	_streams[&"smoke_hiss"] = _make(_synth_noise_burst(1.5, 0.6, 0.35))
 	_loops[&"plane_engine"] = _make_loop(_synth_engine(2.0))
 	_loops[&"wind"] = _make_loop(_synth_wind(2.0))
 	_streams[&"dry_fire"] = _make(_synth_click(0.05, 2400.0, 0.5))
@@ -182,6 +187,25 @@ func _synth_gunshot(length: float, thump_hz: float, gain: float) -> PackedFloat3
 		var tail := lp2 * exp(-t * 5.0) * 1.6
 		var thump := sin(TAU * thump_hz * t * (1.0 - t)) * exp(-t * 22.0) * 0.9
 		out[i] = (crack * 0.7 + body + tail + thump) * gain
+	return out
+
+
+## Explosion: sharp crack, deep boom and a long rumbling tail.
+func _synth_explosion(length: float) -> PackedFloat32Array:
+	var n := int(length * MIX_RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in n:
+		var t := float(i) / MIX_RATE
+		var noise := _rng.randf_range(-1.0, 1.0)
+		lp += (noise - lp) * 0.08
+		lp2 += (noise - lp2) * 0.015
+		var crack := noise * exp(-t * 60.0) * 0.8
+		var boom := sin(TAU * 48.0 * t * (1.0 - t * 0.3)) * exp(-t * 5.0) * 1.1
+		var rumble := lp2 * 6.0 * exp(-t * 2.2) + lp * exp(-t * 7.0) * 1.2
+		out[i] = (crack + boom + rumble) * 0.9
 	return out
 
 

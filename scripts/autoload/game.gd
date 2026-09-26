@@ -13,6 +13,7 @@ var fx: FxManager = null
 var match_manager: MatchManager = null
 var loot: LootManager = null
 var zone: ZoneManager = null
+var throwables: ThrowableSystem = null
 ## The local human player (null when dead characters are cleaned up / no match).
 var player: GameCharacter = null
 ## Active camera used for LOD decisions (animation, audio, etc.).
@@ -33,6 +34,7 @@ func clear() -> void:
 	match_manager = null
 	loot = null
 	zone = null
+	throwables = null
 	player = null
 	camera = null
 	camera_rig = null

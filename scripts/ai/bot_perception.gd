@@ -54,10 +54,12 @@ func scan() -> void:
 			var flat := Vector3(to.x, 0.0, to.z)
 			if flat.length_squared() > 0.001 and fwd.dot(flat.normalized()) < cos_half_fov:
 				continue
-		# Line of sight to the body or the head.
+		# Line of sight to the body or the head (smoke hides both).
 		if not Game.projectiles.has_line_of_sight(eye, c.get_hitbox_center()):
 			if not Game.projectiles.has_line_of_sight(eye, c.get_head_position()):
 				continue
+		if Game.throwables != null and Game.throwables.smoke_blocks(eye, c.get_hitbox_center()):
+			continue
 		var score := d
 		if c == brain.target:
 			score *= 0.7   # stick to the current target

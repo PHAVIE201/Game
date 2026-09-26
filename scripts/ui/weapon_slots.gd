@@ -18,6 +18,8 @@ func _process(_delta: float) -> void:
 			st.append([w.data.display_name, w.ammo, w.scope])
 		else:
 			st.append(null)
+	st.append(p.inventory.get_count(&"grenade_frag"))
+	st.append(p.inventory.get_count(&"grenade_smoke"))
 	if st != _state:
 		_state = st
 		queue_redraw()
@@ -47,3 +49,9 @@ func _draw() -> void:
 			label += "  [" + ItemDB.scope_tag(weapon.scope) + "]"
 		draw_string(font, Vector2(32, y + 19), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
 		draw_string(font, Vector2(w - 70, y + 19), str(weapon.ammo), HORIZONTAL_ALIGNMENT_RIGHT, 60, 16, col)
+	# Throwables under the weapons.
+	var ty := GameCharacter.SLOT_COUNT * (ROW_H + 4.0) + 16.0
+	var frags := p.inventory.get_count(&"grenade_frag")
+	var smokes := p.inventory.get_count(&"grenade_smoke")
+	var text := "G  Lựu đạn ×%d      T  Bom khói ×%d" % [frags, smokes]
+	draw_string(font, Vector2(4, ty), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.8 if frags + smokes > 0 else 0.35))

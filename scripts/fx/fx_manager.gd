@@ -21,6 +21,8 @@ var _emitters: Array[CPUParticles3D] = []
 var _next := 0
 var _decals: Array[Decal] = []
 var _next_decal := 0
+var _blast: CPUParticles3D
+var _blast_smoke: CPUParticles3D
 
 
 func _ready() -> void:
@@ -50,6 +52,10 @@ func _ready() -> void:
 		add_child(p)
 		_emitters.append(p)
 
+	_blast = _make_burst(mesh, 44, 0.7, Color(1.0, 0.62, 0.2), 10.0, 0.6)
+	_blast_smoke = _make_burst(mesh, 28, 2.4, Color(0.35, 0.33, 0.3), 4.0, 1.5)
+	_blast_smoke.gravity = Vector3(0, 1.5, 0)
+
 	var hole_tex := _make_hole_texture()
 	for i in DECAL_POOL:
 		var d := Decal.new()
@@ -62,6 +68,43 @@ func _ready() -> void:
 		d.distance_fade_length = 20.0
 		add_child(d)
 		_decals.append(d)
+
+
+func _make_burst(mesh: Mesh, amount: int, life: float, color: Color, speed: float, size: float) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.emitting = false
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.amount = amount
+	p.lifetime = life
+	p.local_coords = false
+	p.mesh = mesh
+	p.direction = Vector3.UP
+	p.spread = 180.0
+	p.gravity = Vector3(0, -6.0, 0)
+	p.initial_velocity_min = speed * 0.4
+	p.initial_velocity_max = speed
+	p.scale_amount_min = size * 0.6
+	p.scale_amount_max = size * 1.4
+	p.color = color
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 1.0))
+	curve.add_point(Vector2(1.0, 0.0))
+	p.scale_amount_curve = curve
+	add_child(p)
+	return p
+
+
+## Grenade explosion: fireball sparks + a puff of dark smoke + dust.
+func spawn_explosion(pos: Vector3) -> void:
+	if Game.camera != null and Game.camera.global_position.distance_to(pos) > MAX_FX_DISTANCE * 2.0:
+		return
+	_blast.global_position = pos + Vector3(0, 0.3, 0)
+	_blast.restart()
+	_blast_smoke.global_position = pos + Vector3(0, 0.5, 0)
+	_blast_smoke.restart()
+	spawn_impact(pos, Vector3.UP, "ground")
 
 
 func clear() -> void:

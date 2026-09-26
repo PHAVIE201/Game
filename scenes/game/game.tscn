@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scripts/items/loot_manager.gd" id="9_loot"]
 [ext_resource type="Script" path="res://scripts/ui/inventory_screen.gd" id="10_inv"]
 [ext_resource type="Script" path="res://scripts/core/zone_manager.gd" id="11_zone"]
+[ext_resource type="Script" path="res://scripts/weapons/throwable_system.gd" id="12_throw"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.28, 0.55, 0.92, 1)
@@ -71,6 +72,9 @@ environment_path = NodePath("../WorldEnvironment")
 
 [node name="Projectiles" type="Node3D" parent="."]
 script = ExtResource("3_proj")
+
+[node name="Throwables" type="Node3D" parent="."]
+script = ExtResource("12_throw")
 
 [node name="Fx" type="Node3D" parent="."]
 script = ExtResource("4_fx")
